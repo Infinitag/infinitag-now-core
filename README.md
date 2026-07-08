@@ -34,4 +34,4 @@ Geräte-Repos pinnen ihre `lib_deps` auf ein Tag und ziehen bewusst nach.
 
 ## Lizenz
 
-CC BY-NC-SA 4.0 – wie das übrige Infinitag-Projekt.
+CC BY-NC-SA 4.0 – Tobias Stewen.
