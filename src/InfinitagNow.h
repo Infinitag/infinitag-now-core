@@ -33,6 +33,24 @@ enum MsgType : uint8_t {
   MSG_CFG_ACK        = 0x31,  // device -> Config-Box, payload[0] = AckStatus
   MSG_CFG_TEST_SOUND = 0x32,  // Config-Box -> station, payload[0] = sound_id (play only, no persist)
   MSG_IR_SELECT_ECHO = 0xC0,  // reserved/latent (IR pointer), payload[0] = token
+  MSG_DEBUG_CMD      = 0xF0,  // Config-Box -> device: payload[0] = DebugTest, payload[1] = parameter
+  MSG_DEBUG_RESULT   = 0xF1,  // device -> Config-Box: payload[0] = DebugTest, payload[1] = DebugResult
+};
+
+// --- Self-test catalog (MSG_DEBUG_CMD payload[0]) ---------------------------
+enum DebugTest : uint8_t {
+  DBG_SOUND   = 1,  // param = sound index (play only)
+  DBG_LED     = 2,  // run LED test pattern (visual check)
+  DBG_LASER   = 3,  // param = seconds on (auto-off, clamped to 10)
+  DBG_IR      = 4,  // param = burst ms; result = TSOP self-reception
+  DBG_TRIGGER = 5,  // param = timeout s; result when trigger pressed / timeout
+};
+
+enum DebugResult : uint8_t {
+  DBG_RES_OK          = 0,
+  DBG_RES_FAIL        = 1,
+  DBG_RES_TIMEOUT     = 2,
+  DBG_RES_UNSUPPORTED = 3,
 };
 
 // --- Device types ----------------------------------------------------------

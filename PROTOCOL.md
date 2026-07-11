@@ -45,8 +45,22 @@ Festgeschrieben 2026-05-18, `CFG_TEST_SOUND` ergänzt 2026-07-08.
 | 0x31 | `CFG_ACK` | Gerät → Config-Box | Unicast | `[0]`: 0 = OK, 1 = NACK Persist., 2 = NACK Valid. |
 | 0x32 | `CFG_TEST_SOUND` | Config-Box → Station | Unicast | `[0]` = sound_id, nur abspielen, nicht persistieren |
 | 0xC0 | `IR_SELECT_ECHO` | Target → Config-Box | Broadcast | reserviert/latent (IR-Pointer) |
+| 0xF0 | `DEBUG_CMD` | Config-Box → Gerät | Unicast | Selbsttest: `[0]` = Test-Nr., `[1]` = Parameter (siehe unten). Neu 2026-07-11 |
+| 0xF1 | `DEBUG_RESULT` | Gerät → Config-Box | Unicast | `[0]` = Test-Nr., `[1]` = Ergebnis (0 = OK, 1 = FAIL, 2 = TIMEOUT, 3 = UNSUPPORTED) |
 
-Reserviert: 0x40–0x4F (Reads), 0x80–0xBF (Telemetrie), 0xF0–0xFF (Debug/OTA).
+Reserviert: 0x40–0x4F (Reads), 0x80–0xBF (Telemetrie), 0xF2–0xFF (Debug/OTA).
+
+### Selbsttest-Katalog (`DEBUG_CMD`, Station)
+
+| Test-Nr. | Test | Parameter `[1]` | Ergebnis |
+|---|---|---|---|
+| 1 | Sound abspielen | Sound-Index (0-basiert) | OK nach Abspielende |
+| 2 | LED-Testmuster | – | OK (Sichtprüfung, R→G→B→W) |
+| 3 | Laser | Sekunden an (max. 10, Auto-Aus) | OK (Sichtprüfung) |
+| 4 | IR-Burst | Burst-Dauer in ms | OK = TSOP hat den eigenen Burst empfangen, FAIL = nicht |
+| 5 | Trigger-Test | Timeout in Sekunden | OK sobald Trigger gedrückt, sonst TIMEOUT |
+
+Unbekannte Test-Nummern beantwortet das Gerät mit UNSUPPORTED.
 
 ## `DISCOVER_REPLY`-Payload
 
