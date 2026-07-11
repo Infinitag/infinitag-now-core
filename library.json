@@ -1,7 +1,7 @@
 {
   "name": "InfinitagNow",
-  "version": "0.1.0",
-  "description": "Shared ESP-NOW protocol library for the Infinitag Now system (packet format, CRC16, config blobs)",
+  "version": "0.2.0",
+  "description": "Shared ESP-NOW protocol library for the Infinitag Now system (packet format, CRC16, config blobs) + shared ESP-NOW device service",
   "keywords": ["esp-now", "esp32", "lasertag", "infinitag"],
   "repository": {
     "type": "git",
