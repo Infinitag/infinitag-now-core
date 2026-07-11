@@ -39,6 +39,8 @@ class EspNowService {
   volatile size_t _head = 0, _tail = 0;
   portMUX_TYPE _mux = portMUX_INITIALIZER_UNLOCKED;
 
+  uint8_t _channel = 1;  // set in begin(), used for peer registration
+
   // LRU peer cache (broadcast peer is permanent and not tracked here).
   static constexpr size_t MAX_PEERS = 18;
   struct Peer {

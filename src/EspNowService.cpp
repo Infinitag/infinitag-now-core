@@ -6,14 +6,13 @@
 #include <esp_now.h>
 #include <esp_wifi.h>
 
-#include "Config.h"
-
 EspNowService *EspNowService::s_instance = nullptr;
 
 static const uint8_t BCAST[6] = {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
 
 bool EspNowService::begin(uint8_t channel) {
   s_instance = this;
+  _channel = channel;
 
   WiFi.mode(WIFI_STA);
   WiFi.disconnect();  // no STA join wanted (Doc 12 §3.8)
@@ -83,7 +82,7 @@ bool EspNowService::ensurePeer(const uint8_t mac[6]) {
 
   esp_now_peer_info_t info = {};
   memcpy(info.peer_addr, mac, 6);
-  info.channel = cfg::ESPNOW_CHANNEL;
+  info.channel = _channel;
   info.encrypt = false;
   if (esp_now_add_peer(&info) != ESP_OK) return false;
 

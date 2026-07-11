@@ -39,7 +39,7 @@ Festgeschrieben 2026-05-18, `CFG_TEST_SOUND` ergänzt 2026-07-08.
 | 0x02 | `DISCOVER_REPLY` | Gerät → Config-Box | Unicast | siehe unten |
 | 0x03 | `IDENTIFY` | Config-Box → Gerät | Unicast | `[0]` = Dauer in 100 ms (Default 7) |
 | 0x10 | `HIT_REPORT` | Target → Stationen | Broadcast | `[0]` = sound_id; Filter über `station_id` im Header |
-| 0x20 | `SETUP_BEGIN` | Config-Box → Stationen | Broadcast | `[0]` = Timeout s (Default 60) |
+| 0x20 | `SETUP_BEGIN` | Config-Box → Stationen | Broadcast | `[0]` = Timeout s (Default 60); Header-`station_id` = zu vergebende ID, 0 = aktuelle behalten (präzisiert 2026-07-11) |
 | 0x21 | `SETUP_TAKE` | Station → alle | Broadcast | `[0]` = neue station_id |
 | 0x30 | `CFG_WRITE` | Config-Box → Gerät | Unicast | Config-Blob (siehe unten) |
 | 0x31 | `CFG_ACK` | Gerät → Config-Box | Unicast | `[0]`: 0 = OK, 1 = NACK Persist., 2 = NACK Valid. |
