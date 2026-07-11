@@ -79,13 +79,7 @@ Unbekannte Test-Nummern beantwortet das Gerät mit UNSUPPORTED.
 | 0 | `station_id` | u8 | 1 |
 | 1 | `volume_pct` | u8 | 80 |
 | 2 | `default_setup_sound` | u8 | 13 |
-| 3 | `led_ready` | u8 | 0x02 (Grün) – Stab-Farbe „schussbereit", LED-Maske (ergänzt 2026-07-11) |
-| 4 | `led_busy` | u8 | 0x01 (Rot) – Stab-Farbe „beschäftigt" (z. B. Audio spielt), LED-Maske |
-| 5–15 | reserviert (0) | | |
-
-**LED-Maske:** Kanal-Bitmaske der SK6812-RGBW-Dies – bit0 = R, bit1 = G,
-bit2 = B, bit3 = W. Gültig sind alle 15 nicht-leeren Kombinationen (1–15);
-0 bedeutet „Feld nicht gesetzt" (Alt-Firmware) → Empfänger nutzt den Default.
+| 3–15 | reserviert (0) | | |
 
 ## Target-Config-Blob (16 Byte)
 

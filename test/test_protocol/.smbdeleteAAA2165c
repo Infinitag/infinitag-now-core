@@ -49,8 +49,6 @@ void test_station_blob_roundtrip() {
   in.station_id = 3;
   in.volume_pct = 55;
   in.default_setup_sound = 9;
-  in.led_ready = LED_R | LED_W;   // red + white die
-  in.led_busy = LED_B;
   uint8_t blob[STATION_BLOB_SIZE];
   encodeStationConfig(in, blob);
   StationConfig out;
@@ -58,21 +56,6 @@ void test_station_blob_roundtrip() {
   TEST_ASSERT_EQUAL_UINT8(3, out.station_id);
   TEST_ASSERT_EQUAL_UINT8(55, out.volume_pct);
   TEST_ASSERT_EQUAL_UINT8(9, out.default_setup_sound);
-  TEST_ASSERT_EQUAL_UINT8(LED_R | LED_W, out.led_ready);
-  TEST_ASSERT_EQUAL_UINT8(LED_B, out.led_busy);
-}
-
-void test_station_blob_legacy_defaults() {
-  // A blob from a firmware without the LED fields carries zeros at
-  // offsets 3/4 -> decode must fall back to the defaults (green/red).
-  uint8_t blob[STATION_BLOB_SIZE] = {0};
-  blob[0] = 4;
-  blob[1] = 70;
-  blob[2] = 2;
-  StationConfig out;
-  decodeStationConfig(blob, sizeof(blob), out);
-  TEST_ASSERT_EQUAL_UINT8(LED_G, out.led_ready);
-  TEST_ASSERT_EQUAL_UINT8(LED_R, out.led_busy);
 }
 
 void test_target_blob_roundtrip() {
@@ -149,7 +132,6 @@ int main() {
   RUN_TEST(test_validate_rejects_corruption);
   RUN_TEST(test_validate_rejects_wrong_version);
   RUN_TEST(test_station_blob_roundtrip);
-  RUN_TEST(test_station_blob_legacy_defaults);
   RUN_TEST(test_target_blob_roundtrip);
   RUN_TEST(test_target_blob_endianness);
   RUN_TEST(test_discover_reply_roundtrip);

@@ -92,22 +92,10 @@ static_assert(sizeof(Packet) == PACKET_SIZE, "Packet must be exactly 36 bytes");
 
 // --- Config blobs (Doc 12 §3.6.2 / §3.6.3) ---------------------------------
 
-// LED channel mask for the wand status colors (SK6812 RGBW).
-// Any non-empty combination of the four dies is a valid color (1..15).
-enum LedChannel : uint8_t {
-  LED_R = 0x01,
-  LED_G = 0x02,
-  LED_B = 0x04,
-  LED_W = 0x08,
-  LED_MASK_MAX = 0x0F,
-};
-
 struct StationConfig {
   uint8_t station_id = 1;
   uint8_t volume_pct = 80;
   uint8_t default_setup_sound = 13;
-  uint8_t led_ready = LED_G;  // wand color when ready to fire (added 2026-07-11)
-  uint8_t led_busy = LED_R;   // wand color while busy (audio playing etc.)
 };
 constexpr size_t STATION_BLOB_SIZE = 16;
 
