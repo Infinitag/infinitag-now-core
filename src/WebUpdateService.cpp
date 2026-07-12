@@ -22,6 +22,11 @@ bool WebUpdateService::begin(const char *apName, const char *fwVersion,
   _server.on(
       "/update", HTTP_POST, [this]() { handleUploadDone(); },
       [this]() { handleUploadData(); });
+  if (_store) {
+    _server.on(
+        "/store", HTTP_POST, [this]() { handleStoreDone(); },
+        [this]() { handleStoreData(); });
+  }
   _server.onNotFound([this]() { handleRoot(); });
   _server.begin();
   return true;
@@ -57,7 +62,19 @@ void WebUpdateService::handleRoot() {
   html +=
       "-vX.Y.Z.bin</b> &ndash; andere Dateinamen werden abgelehnt.<br>"
       "Nach erfolgreichem Upload startet das Ger&auml;t automatisch "
-      "neu.</p></body></html>";
+      "neu.</p>";
+  if (_store) {
+    html +=
+        "<hr><h3>Ger&auml;te-Image ablegen</h3>"
+        "<p>Firmware f&uuml;r Station/Target auf der Box speichern &ndash; "
+        "wird sp&auml;ter per Funk verteilt, die Box flasht sich damit "
+        "NICHT selbst.</p>"
+        "<form method='POST' action='/store' enctype='multipart/form-data'>"
+        "<p><input type='file' name='image' accept='.bin' required></p>"
+        "<p><input type='submit' value='Image speichern'></p>"
+        "</form>";
+  }
+  html += "</body></html>";
   _server.send(200, "text/html", html);
 }
 
@@ -117,6 +134,68 @@ void WebUpdateService::handleUploadData() {
 
     default:
       break;
+  }
+}
+
+void WebUpdateService::handleStoreData() {
+  if (!_store) return;
+  HTTPUpload &up = _server.upload();
+
+  switch (up.status) {
+    case UPLOAD_FILE_START:
+      _uploading = true;
+      _storeOk = false;
+      Serial.printf("[UPD] Image-Upload start: %s\n", up.filename.c_str());
+      _storeActive = _store->begin(up.filename.c_str());
+      break;
+
+    case UPLOAD_FILE_WRITE:
+      if (_storeActive && !_store->write(up.buf, up.currentSize)) {
+        Serial.println("[UPD] Image-Schreibfehler");
+        _store->end(false);
+        _storeActive = false;
+      }
+      break;
+
+    case UPLOAD_FILE_END:
+      if (_storeActive) {
+        _storeOk = _store->end(true);
+        _storeActive = false;
+        Serial.printf("[UPD] Image-Upload fertig: %u Bytes, %s\n",
+                      up.totalSize, _storeOk ? "akzeptiert" : "abgelehnt");
+      }
+      _uploading = false;
+      break;
+
+    case UPLOAD_FILE_ABORTED:
+      if (_storeActive) {
+        _store->end(false);
+        _storeActive = false;
+      }
+      _uploading = false;
+      Serial.println("[UPD] Image-Upload abgebrochen");
+      break;
+
+    default:
+      break;
+  }
+}
+
+void WebUpdateService::handleStoreDone() {
+  const char *info =
+      (_store && _store->resultText) ? _store->resultText() : "";
+  if (_storeOk) {
+    String html = "<h2>Image gespeichert.</h2><p>";
+    html += info;
+    html += "</p><p><a href='/'>Zur&uuml;ck</a></p>";
+    _server.send(200, "text/html", html);
+  } else {
+    String html =
+        "<h2>Image abgelehnt.</h2><p>Kein g&uuml;ltiges "
+        "Infinitag-Firmware-Image (Marker fehlt) oder Speicherfehler. ";
+    html += info;
+    html += "</p><p><a href='/'>Zur&uuml;ck</a></p>";
+    _server.send(400, "text/html", html);
   }
 }
 

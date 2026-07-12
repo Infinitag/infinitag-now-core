@@ -14,6 +14,20 @@
 #include <Arduino.h>
 #include <WebServer.h>
 
+// Optional second upload target (config box only): store a DEVICE
+// firmware image into the box's file system instead of flashing it
+// (OTA-Vollausbau Etappe 1, Doc 21 §3.4). The callbacks stream the
+// upload; end(true) must verify the image (FwMarker) and reports via
+// its return value whether the file was accepted.
+struct StoreHooks {
+  bool (*begin)(const char *filename);             // open target, false = reject
+  bool (*write)(const uint8_t *data, size_t len);  // stream chunk
+  // ok = upload completed; return = image accepted (marker valid etc.)
+  bool (*end)(bool ok);
+  // short status for the result page, e.g. "Station v0.2.3 gespeichert"
+  const char *(*resultText)();
+};
+
 class WebUpdateService {
  public:
   // apName: open SoftAP SSID, e.g. "infinitag-sta-220AAC".
@@ -27,6 +41,9 @@ class WebUpdateService {
   //   (chip id) at Update.end().
   bool begin(const char *apName, const char *fwVersion,
              const char *deviceLabel, const char *filePrefix);
+
+  // Enable the second "store device image" form (call before begin()).
+  void setStoreHooks(const StoreHooks *hooks) { _store = hooks; }
 
   // Service HTTP; call every loop() iteration while the mode is active.
   void loop();
@@ -46,6 +63,8 @@ class WebUpdateService {
   void handleRoot();
   void handleUploadData();
   void handleUploadDone();
+  void handleStoreData();
+  void handleStoreDone();
 
   WebServer _server{80};
   char _version[16] = "?";
@@ -55,6 +74,10 @@ class WebUpdateService {
   bool _done = false;
   bool _failed = false;
   bool _wrongFile = false;  // rejected because the file name did not match
+
+  const StoreHooks *_store = nullptr;
+  bool _storeActive = false;  // hooks->begin() succeeded for this upload
+  bool _storeOk = false;      // last store upload accepted
 };
 
 #endif  // ARDUINO
