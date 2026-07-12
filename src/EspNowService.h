@@ -25,6 +25,15 @@ class EspNowService {
   // Pops one received (and already CRC-validated) packet. False if empty.
   bool receive(RxPacket &out);
 
+  // Raw (non-protocol) frame hook for the firmware push data phase.
+  // CALLED FROM THE WIFI TASK – the handler must only copy data away.
+  using RawHandler = void (*)(const uint8_t mac[6], const uint8_t *data,
+                              int len);
+  void setRawHandler(RawHandler h) { _raw = h; }
+
+  // Send a raw ESP-NOW frame (up to 250 bytes). Registers the peer.
+  bool sendRaw(const uint8_t mac[6], const uint8_t *data, size_t len);
+
   const uint8_t *ownMac() const { return _ownMac; }
 
  private:
@@ -51,6 +60,7 @@ class EspNowService {
   Peer _peers[MAX_PEERS];
 
   uint8_t _ownMac[6] = {0};
+  RawHandler _raw = nullptr;
 };
 
 #endif  // ARDUINO

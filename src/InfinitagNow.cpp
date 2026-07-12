@@ -78,6 +78,62 @@ void decodeTargetConfig(const uint8_t *blob, size_t len, TargetConfig &c) {
   if (len >= 13) c.sw_channels = blob[12];
 }
 
+// --- CRC-32 (IEEE, reflected, bitwise – speed is irrelevant here) -------------
+uint32_t crc32(uint32_t crc, const uint8_t *data, size_t len) {
+  crc = ~crc;
+  for (size_t i = 0; i < len; i++) {
+    crc ^= data[i];
+    for (int b = 0; b < 8; b++) {
+      crc = (crc >> 1) ^ (0xEDB88320UL & (-(int32_t)(crc & 1)));
+    }
+  }
+  return ~crc;
+}
+
+// --- ESP-NOW push control payloads ---------------------------------------------
+static void putU32(uint8_t *dst, uint32_t v) {
+  dst[0] = v & 0xFF;
+  dst[1] = (v >> 8) & 0xFF;
+  dst[2] = (v >> 16) & 0xFF;
+  dst[3] = (v >> 24) & 0xFF;
+}
+static uint32_t getU32(const uint8_t *src) {
+  return (uint32_t)src[0] | ((uint32_t)src[1] << 8) |
+         ((uint32_t)src[2] << 16) | ((uint32_t)src[3] << 24);
+}
+
+void encodePushBegin(const PushBegin &b, uint8_t *payload) {
+  memset(payload, 0, PAYLOAD_SIZE);
+  putU32(payload, b.size);
+  putU32(payload + 4, b.crc32);
+  payload[8] = b.major;
+  payload[9] = b.minor;
+  payload[10] = b.patch;
+  payload[11] = (uint8_t)PUSH_FRAME_DATA;    // for forward compatibility
+  payload[12] = PUSH_WINDOW_FRAMES;
+}
+
+void decodePushBegin(const uint8_t *payload, PushBegin &b) {
+  b.size = getU32(payload);
+  b.crc32 = getU32(payload + 4);
+  b.major = payload[8];
+  b.minor = payload[9];
+  b.patch = payload[10];
+}
+
+void encodePushAck(const PushAck &a, uint8_t *payload) {
+  memset(payload, 0, PAYLOAD_SIZE);
+  putU16(payload, a.window);
+  putU32(payload + 2, a.missing);
+  payload[6] = a.status;
+}
+
+void decodePushAck(const uint8_t *payload, PushAck &a) {
+  a.window = getU16(payload);
+  a.missing = getU32(payload + 2);
+  a.status = payload[6];
+}
+
 // --- HIT_REPORT payload -------------------------------------------------------
 void encodeHitReport(const uint8_t stationMac[6], uint8_t soundId,
                      uint8_t *payload) {

@@ -152,6 +152,46 @@ void test_sound_catalog() {
   }
 }
 
+void test_crc32_check_vector() {
+  // CRC-32/IEEE("123456789") = 0xCBF43926
+  const uint8_t v[] = {'1', '2', '3', '4', '5', '6', '7', '8', '9'};
+  TEST_ASSERT_EQUAL_HEX32(0xCBF43926, crc32(0, v, sizeof(v)));
+  // incremental feeding must give the same result
+  uint32_t c = crc32(0, v, 4);
+  c = crc32(c, v + 4, 5);
+  TEST_ASSERT_EQUAL_HEX32(0xCBF43926, c);
+}
+
+void test_push_begin_roundtrip() {
+  PushBegin in;
+  in.size = 857184;
+  in.crc32 = 0xDEADBEEF;
+  in.major = 0; in.minor = 3; in.patch = 1;
+  uint8_t payload[PAYLOAD_SIZE];
+  encodePushBegin(in, payload);
+  PushBegin out;
+  decodePushBegin(payload, out);
+  TEST_ASSERT_EQUAL_UINT32(857184, out.size);
+  TEST_ASSERT_EQUAL_HEX32(0xDEADBEEF, out.crc32);
+  TEST_ASSERT_EQUAL_UINT8(3, out.minor);
+  TEST_ASSERT_EQUAL_UINT8((uint8_t)PUSH_FRAME_DATA, payload[11]);
+  TEST_ASSERT_EQUAL_UINT8(PUSH_WINDOW_FRAMES, payload[12]);
+}
+
+void test_push_ack_roundtrip() {
+  PushAck in;
+  in.window = 517;
+  in.missing = 0x00010005;  // frames 0, 2 and 16 missing
+  in.status = PUSH_ACK_WINDOW;
+  uint8_t payload[PAYLOAD_SIZE];
+  encodePushAck(in, payload);
+  PushAck out;
+  decodePushAck(payload, out);
+  TEST_ASSERT_EQUAL_UINT16(517, out.window);
+  TEST_ASSERT_EQUAL_HEX32(0x00010005, out.missing);
+  TEST_ASSERT_EQUAL_UINT8(PUSH_ACK_WINDOW, out.status);
+}
+
 void test_blob_len_clamped() {
   DiscoverReply in;
   in.config_blob_len = 200;  // bogus – must be clamped to CONFIG_BLOB_MAX
@@ -174,6 +214,9 @@ int main() {
   RUN_TEST(test_hit_report_roundtrip);
   RUN_TEST(test_discover_reply_roundtrip);
   RUN_TEST(test_sound_catalog);
+  RUN_TEST(test_crc32_check_vector);
+  RUN_TEST(test_push_begin_roundtrip);
+  RUN_TEST(test_push_ack_roundtrip);
   RUN_TEST(test_blob_len_clamped);
   return UNITY_END();
 }
