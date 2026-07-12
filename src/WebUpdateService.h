@@ -54,9 +54,12 @@ class WebUpdateService {
   // page); the caller owns the buffer and keeps it alive/updated.
   void setCustomPage(const char *html) { _customPage = html; }
 
-  // Small styled result page (dark Infinitag look) with a back link –
-  // shared so device-side handlers (e.g. /wifi on the box) match.
-  static String resultPage(const char *title, const String &body);
+  // Small styled result page (dark Infinitag look) – shared so
+  // device-side handlers (e.g. /wifi on the box) match. backLink=false
+  // for pages after which the device reboots (the AP disappears, a
+  // back link would just confuse).
+  static String resultPage(const char *title, const String &body,
+                           bool backLink = true);
 
   // Service HTTP; call every loop() iteration while the mode is active.
   void loop();
