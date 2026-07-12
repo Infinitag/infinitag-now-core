@@ -50,8 +50,11 @@ wird dem `recv_cb` mitgegeben – sie fährt nicht im Payload mit.
 | 0xF1 | `DEBUG_RESULT` | Gerät → Config-Box | Unicast | `[0]` = Test-Nr., `[1]` = Ergebnis (0 = OK, 1 = FAIL, 2 = TIMEOUT, 3 = UNSUPPORTED) |
 | 0xF2 | `UPDATE_BEGIN` | Config-Box → Gerät | Unicast | `[0]` = Timeout in Minuten (0 = Default 5). Gerät wechselt in den SoftAP-Update-Modus. Neu 2026-07-12 |
 | 0xF3 | `UPDATE_ACK` | Gerät → Config-Box | Unicast | `[0]` = 0 (Gerät wechselt jetzt in den Update-Modus) |
+| 0xF4 | `PUSH_BEGIN` | Config-Box → Gerät | Unicast | ESP-NOW-Funk-Update startet: `[0..3]` Größe (u32), `[4..7]` CRC32, `[8..10]` Version, `[11]` Frame-Nutzbytes (242), `[12]` Fenstergröße (16). Neu 2026-07-12 |
+| 0xF5 | `PUSH_ACK` | Gerät → Config-Box | Unicast | `[0..1]` Fenster (u16), `[2..5]` Bitmap fehlender Frames (u32), `[6]` Status (0 = Fenster-ACK, 1 = fertig/OK, 2 = CRC-Fehler, 3 = Flash-Fehler, 4 = busy) |
+| 0xF6 | `PUSH_END` | Config-Box → Gerät | Unicast | alle Fenster gesendet → Gerät prüft CRC32, `Update.end`, finaler `PUSH_ACK`, Reboot |
 
-Reserviert: 0x40–0x4F (Reads), 0x80–0xBF (Telemetrie), 0xF4–0xFF (Debug/OTA).
+Reserviert: 0x40–0x4F (Reads), 0x80–0xBF (Telemetrie), 0xF7–0xFF (Debug/OTA).
 Entfallen seit v0x02: 0x20 `SETUP_BEGIN`, 0x21 `SETUP_TAKE`.
 
 ### `HIT_REPORT`-Routing
@@ -85,6 +88,19 @@ Upload innerhalb des Timeouts rebootet das Gerät in die alte Firmware.
 Die Config-Box selbst startet den gleichen Modus lokal über ihr
 Tools-Menü. Firmware-Versionen prüft man nach dem Update per Discovery
 (`fw_version` im `DISCOVER_REPLY`).
+
+### ESP-NOW-Funk-Update (`PUSH_*`, Doc 21 Etappe 3)
+
+Die **Datenphase** läuft nicht über das 36-Byte-Paketformat, sondern über
+**rohe ESP-NOW-Frames** (bis 250 Byte): `'I' 'N' 'W' 'D'` + Frame-Index
+(u32, LE) + bis zu 242 Nutzbytes. Der Empfänger puffert ein Fenster
+(16 Frames) im RAM, flasht es sequenziell in den inaktiven OTA-Slot und
+quittiert per `PUSH_ACK` mit Bitmap der fehlenden Frames (selektive
+Nachlieferung). Der Boot-Slot wechselt erst nach vollständigem Empfang
+und CRC32-Prüfung – ein abgebrochener Push bootet immer die alte
+Firmware. Geteilte Implementierung: `EspNowPush.h` (Sender = Box,
+Empfänger = Station/Target); Frames laufen am normalen Paket-Validator
+vorbei über den Raw-Handler des `EspNowService`.
 
 ## `DISCOVER_REPLY`-Payload
 

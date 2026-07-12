@@ -39,6 +39,37 @@ enum MsgType : uint8_t {
   MSG_UPDATE_BEGIN   = 0xF2,  // Config-Box -> device: enter SoftAP update mode,
                               //   payload[0] = timeout in minutes (0 = default 5)
   MSG_UPDATE_ACK     = 0xF3,  // device -> Config-Box: payload[0] = 0 OK (entering)
+  MSG_PUSH_BEGIN     = 0xF4,  // Box -> device: ESP-NOW firmware push starts
+  MSG_PUSH_ACK       = 0xF5,  // device -> Box: window/missing bitmap or final status
+  MSG_PUSH_END       = 0xF6,  // Box -> device: all windows sent, finalize
+};
+
+// --- ESP-NOW firmware push (Doc 21 E3) --------------------------------------
+// Control runs over normal packets (types above); the data phase uses RAW
+// 250-byte ESP-NOW frames: 'I','N','W','D' + u32 frame index (LE) +
+// PUSH_FRAME_DATA payload bytes. Frames of one window are buffered in RAM
+// on the receiver and flashed sequentially once the window is complete.
+constexpr size_t PUSH_FRAME_DATA = 242;   // 250 - 8 byte raw header
+constexpr uint8_t PUSH_WINDOW_FRAMES = 16;
+
+struct PushBegin {
+  uint32_t size = 0;    // total image bytes
+  uint32_t crc32 = 0;   // over the whole image
+  uint8_t major = 0, minor = 0, patch = 0;
+};
+
+enum PushAckStatus : uint8_t {
+  PUSH_ACK_WINDOW = 0,       // window ack, bitmap = missing frames
+  PUSH_ACK_FINAL_OK = 1,     // flashed + verified, device reboots
+  PUSH_ACK_FINAL_CRC = 2,    // image crc mismatch
+  PUSH_ACK_FINAL_FLASH = 3,  // Update.begin/end failed
+  PUSH_ACK_BUSY = 4,         // device cannot start (e.g. push active)
+};
+
+struct PushAck {
+  uint16_t window = 0;
+  uint32_t missing = 0;  // bit i = frame window*PUSH_WINDOW_FRAMES+i missing
+  uint8_t status = PUSH_ACK_WINDOW;
 };
 
 // --- Self-test catalog (MSG_DEBUG_CMD payload[0]) ---------------------------
@@ -153,6 +184,15 @@ void encodeStationConfig(const StationConfig &c, uint8_t *blob);
 void decodeStationConfig(const uint8_t *blob, size_t len, StationConfig &c);
 void encodeTargetConfig(const TargetConfig &c, uint8_t *blob);
 void decodeTargetConfig(const uint8_t *blob, size_t len, TargetConfig &c);
+
+// CRC-32 (IEEE 802.3, reflected, init/xorout 0xFFFFFFFF) for the push.
+uint32_t crc32(uint32_t crc, const uint8_t *data, size_t len);
+
+// Push payload encode/decode (into/from Packet::payload).
+void encodePushBegin(const PushBegin &b, uint8_t *payload);
+void decodePushBegin(const uint8_t *payload, PushBegin &b);
+void encodePushAck(const PushAck &a, uint8_t *payload);
+void decodePushAck(const uint8_t *payload, PushAck &a);
 
 // HIT_REPORT payload: [0..5] = destination station MAC, [6] = sound_id.
 void encodeHitReport(const uint8_t stationMac[6], uint8_t soundId,

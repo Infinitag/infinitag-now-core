@@ -43,7 +43,11 @@ void EspNowService::onRecvStatic(const uint8_t *mac, const uint8_t *data,
                                  int len) {
   EspNowService *self = s_instance;
   if (!self) return;
-  if (!inow::validate(data, (size_t)len)) return;  // wrong system / corrupt
+  if (!inow::validate(data, (size_t)len)) {
+    // not one of our 36-byte packets: offer it to the raw hook (push data)
+    if (self->_raw) self->_raw(mac, data, len);
+    return;
+  }
 
   portENTER_CRITICAL(&self->_mux);
   const size_t next = (self->_head + 1) % RX_RING;
@@ -105,6 +109,12 @@ bool EspNowService::send(const uint8_t mac[6], inow::Packet &p) {
   inow::seal(p);
   return esp_now_send(mac, reinterpret_cast<uint8_t *>(&p), sizeof(p)) ==
          ESP_OK;
+}
+
+bool EspNowService::sendRaw(const uint8_t mac[6], const uint8_t *data,
+                            size_t len) {
+  if (len > 250 || !ensurePeer(mac)) return false;
+  return esp_now_send(mac, data, len) == ESP_OK;
 }
 
 bool EspNowService::sendBroadcast(inow::Packet &p) {
