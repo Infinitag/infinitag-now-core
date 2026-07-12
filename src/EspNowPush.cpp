@@ -66,6 +66,9 @@ void EspNowPushReceiver::sendAck(uint16_t window, uint32_t missing,
 }
 
 void EspNowPushReceiver::fail(uint8_t status) {
+  // capture the REAL update error before abort() overwrites it
+  _updErr = Update.getError();
+  strncpy(_updErrStr, Update.errorString(), sizeof(_updErrStr) - 1);
   Update.abort();
   _failCode = status;
   sendAck(0xFFFF, 0, status);
