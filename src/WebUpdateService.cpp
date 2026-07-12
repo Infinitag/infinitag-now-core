@@ -36,7 +36,8 @@ void WebUpdateService::loop() { _server.handleClient(); }
 
 int WebUpdateService::clientCount() const { return WiFi.softAPgetStationNum(); }
 
-String WebUpdateService::resultPage(const char *title, const String &body) {
+String WebUpdateService::resultPage(const char *title, const String &body,
+                                    bool backLink) {
   String h =
       "<!DOCTYPE html><html><head><meta charset='utf-8'>"
       "<meta name='viewport' content='width=device-width,initial-scale=1'>"
@@ -52,8 +53,9 @@ String WebUpdateService::resultPage(const char *title, const String &body) {
   h += title;
   h += "</h2><p>";
   h += body;
-  h += "</p><p><a href='/'>&larr; Zur&uuml;ck</a></p></div></div>"
-       "</body></html>";
+  h += "</p>";
+  if (backLink) h += "<p><a href='/'>&larr; Zur&uuml;ck</a></p>";
+  h += "</div></div></body></html>";
   return h;
 }
 
@@ -223,9 +225,14 @@ void WebUpdateService::handleStoreDone() {
 
 void WebUpdateService::handleUploadDone() {
   if (_done) {
-    _server.send(200, "text/html",
-                 resultPage("Update OK",
-                            "Das Ger&auml;t startet jetzt automatisch neu."));
+    _server.send(
+        200, "text/html",
+        resultPage("Update OK",
+                   "Das Ger&auml;t startet jetzt automatisch neu &ndash; "
+                   "dieses WLAN verschwindet dabei und die Verbindung "
+                   "trennt sich von selbst. Diese Seite kann einfach "
+                   "geschlossen werden.",
+                   /*backLink=*/false));
   } else if (_wrongFile) {
     String body = "Dieses Ger&auml;t ist <b>";
     body += _label;
