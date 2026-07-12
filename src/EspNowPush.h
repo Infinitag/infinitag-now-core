@@ -40,6 +40,12 @@ class EspNowPushReceiver {
   bool active() const { return _state == RECEIVING; }
   size_t bytesDone() const { return _bytesDone; }
   size_t bytesTotal() const { return _begin.size; }
+  // PushAckStatus of a failure (for the device's error screen)
+  uint8_t failCode() const { return _failCode; }
+  // Update-library error captured BEFORE the cleanup abort (abort would
+  // overwrite it with "Aborted"); 0/"" when not a flash failure.
+  uint8_t updateError() const { return _updErr; }
+  const char *updateErrorString() const { return _updErrStr; }
   // ms since the last received frame/control (watchdog for the caller)
   uint32_t idleMs() const { return millis() - _lastRxMs; }
 
@@ -47,7 +53,8 @@ class EspNowPushReceiver {
   static void rawHandlerStatic(const uint8_t mac[6], const uint8_t *data,
                                int len);
   void onRawFrame(const uint8_t *data, int len);
-  void sendAck(uint16_t window, uint32_t missing, uint8_t status);
+  void sendAck(uint16_t window, uint32_t missing, uint8_t status,
+               uint8_t detail = 0);
   uint32_t windowExpectMask() const;
   void finishWindow();
   void fail(uint8_t status);
@@ -66,12 +73,17 @@ class EspNowPushReceiver {
   uint8_t _winBuf[inow::PUSH_WINDOW_FRAMES][inow::PUSH_FRAME_DATA];
 
   size_t _bytesDone = 0;
+  uint8_t _failCode = 0;
+  uint8_t _updErr = 0;
+  char _updErrStr[32] = "";
   uint32_t _crc = 0;
   uint32_t _lastRxMs = 0;
   uint32_t _lastAckMs = 0;
 
-  // small ring buffer filled from the WiFi task, drained in loop()
-  static constexpr size_t QUEUE = 8;
+  // Ring buffer filled from the WiFi task, drained in loop(). Sized for
+  // more than one full window: the receiver's OLED redraw blocks ~100 ms
+  // in which a whole 16-frame burst can arrive.
+  static constexpr size_t QUEUE = 24;
   struct RawFrame {
     uint8_t len;
     uint8_t data[250];
@@ -106,6 +118,8 @@ class EspNowPushSender {
   size_t bytesDone() const { return _ackedBytes; }
   size_t bytesTotal() const { return _size; }
   uint8_t finalStatus() const { return _finalStatus; }
+  // Update-library error number relayed by the device (0 = none)
+  uint8_t finalDetail() const { return _finalDetail; }
 
  private:
   void sendBegin();
@@ -131,6 +145,7 @@ class EspNowPushSender {
   uint32_t _deadline = 0;
   size_t _ackedBytes = 0;
   uint8_t _finalStatus = 0xFF;
+  uint8_t _finalDetail = 0;
 };
 
 #endif  // ARDUINO

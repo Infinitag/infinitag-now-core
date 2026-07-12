@@ -126,12 +126,14 @@ void encodePushAck(const PushAck &a, uint8_t *payload) {
   putU16(payload, a.window);
   putU32(payload + 2, a.missing);
   payload[6] = a.status;
+  payload[7] = a.detail;
 }
 
 void decodePushAck(const uint8_t *payload, PushAck &a) {
   a.window = getU16(payload);
   a.missing = getU32(payload + 2);
   a.status = payload[6];
+  a.detail = payload[7];
 }
 
 // --- HIT_REPORT payload -------------------------------------------------------
