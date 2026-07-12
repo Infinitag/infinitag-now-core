@@ -3,6 +3,7 @@
 
 #include <unity.h>
 #include "InfinitagNow.h"
+#include "SoundCatalog.h"
 
 using namespace inow;
 
@@ -138,6 +139,19 @@ void test_discover_reply_roundtrip() {
   TEST_ASSERT_EQUAL_UINT8(5, tcOut.sound_id);
 }
 
+void test_sound_catalog() {
+  TEST_ASSERT_TRUE(SOUND_COUNT >= 1);
+  TEST_ASSERT_EQUAL_UINT8(15, SOUND_COUNT);
+  TEST_ASSERT_EQUAL_STRING("Test", soundName(0));
+  TEST_ASSERT_EQUAL_STRING("Witch", soundName(SOUND_COUNT - 1));
+  TEST_ASSERT_EQUAL_STRING("?", soundName(SOUND_COUNT));  // out of range
+  // OLED rows break beyond 8 characters – enforce the display limit.
+  for (uint8_t i = 0; i < SOUND_COUNT; i++) {
+    TEST_ASSERT_TRUE(strlen(SOUND_CATALOG[i].name) <= 8);
+    TEST_ASSERT_EQUAL_CHAR('/', SOUND_CATALOG[i].file[0]);
+  }
+}
+
 void test_blob_len_clamped() {
   DiscoverReply in;
   in.config_blob_len = 200;  // bogus – must be clamped to CONFIG_BLOB_MAX
@@ -159,6 +173,7 @@ int main() {
   RUN_TEST(test_target_blob_endianness);
   RUN_TEST(test_hit_report_roundtrip);
   RUN_TEST(test_discover_reply_roundtrip);
+  RUN_TEST(test_sound_catalog);
   RUN_TEST(test_blob_len_clamped);
   return UNITY_END();
 }
