@@ -67,7 +67,10 @@ void EspNowPushReceiver::sendAck(uint16_t window, uint32_t missing,
 
 void EspNowPushReceiver::fail(uint8_t status) {
   Update.abort();
+  _failCode = status;
   sendAck(0xFFFF, 0, status);
+  delay(2);
+  sendAck(0xFFFF, 0, status);  // twice – a lost error ack stalls the box
   _state = FAILED;
 }
 
@@ -120,8 +123,11 @@ void EspNowPushReceiver::onControl(const RxPacket &rx) {
       sendAck(_window, expect & ~_haveMask, PUSH_ACK_WINDOW);
       return;
     }
-    if (_crc != _begin.crc32) {
-      Serial.printf("[PUSH] CRC-Fehler: %08X != %08X\n", _crc, _begin.crc32);
+    Serial.printf("[PUSH] END: %u/%u Bytes, %u Fenster, CRC %08X/%08X\n",
+                  (unsigned)_bytesDone, _begin.size, _window,
+                  _crc, _begin.crc32);
+    if (_bytesDone != _begin.size || _crc != _begin.crc32) {
+      Serial.println("[PUSH] CRC-/Groessen-Fehler");
       fail(PUSH_ACK_FINAL_CRC);
       return;
     }
@@ -359,7 +365,7 @@ void EspNowPushSender::loop() {
   if (millis() < _deadline) return;
 
   // no (or lost) ack – retry the current step
-  if (++_retries > 20) {
+  if (++_retries > (_endSent ? 8 : 20)) {
     Serial.printf("[PUSH] Abbruch: keine Antwort (Fenster %u/%u, End=%d)\n",
                   _window, _windows, _endSent);
     _finalStatus = 0xFE;  // give-up marker: device unreachable

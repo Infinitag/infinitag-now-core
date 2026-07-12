@@ -40,6 +40,8 @@ class EspNowPushReceiver {
   bool active() const { return _state == RECEIVING; }
   size_t bytesDone() const { return _bytesDone; }
   size_t bytesTotal() const { return _begin.size; }
+  // PushAckStatus of a failure (for the device's error screen)
+  uint8_t failCode() const { return _failCode; }
   // ms since the last received frame/control (watchdog for the caller)
   uint32_t idleMs() const { return millis() - _lastRxMs; }
 
@@ -66,6 +68,7 @@ class EspNowPushReceiver {
   uint8_t _winBuf[inow::PUSH_WINDOW_FRAMES][inow::PUSH_FRAME_DATA];
 
   size_t _bytesDone = 0;
+  uint8_t _failCode = 0;
   uint32_t _crc = 0;
   uint32_t _lastRxMs = 0;
   uint32_t _lastAckMs = 0;
