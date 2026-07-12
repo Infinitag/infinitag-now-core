@@ -36,7 +36,32 @@ void WebUpdateService::loop() { _server.handleClient(); }
 
 int WebUpdateService::clientCount() const { return WiFi.softAPgetStationNum(); }
 
+String WebUpdateService::resultPage(const char *title, const String &body) {
+  String h =
+      "<!DOCTYPE html><html><head><meta charset='utf-8'>"
+      "<meta name='viewport' content='width=device-width,initial-scale=1'>"
+      "<style>body{margin:0;background:#0c0e0f;font-family:Helvetica,Arial,"
+      "sans-serif;color:#e8eaea;font-size:14px}.wrap{max-width:440px;"
+      "margin:40px auto;padding:16px}.card{background:#131516;border:1px "
+      "solid #23282a;border-radius:8px;padding:24px 28px}.bar{height:5px;"
+      "background:linear-gradient(90deg,#79C8B4,#03817D);border-radius:"
+      "8px 8px 0 0;margin:-24px -28px 18px}h2{font-size:15px;color:#fff;"
+      "margin:0 0 10px}p{color:#8a9092;line-height:1.5}a{color:#4db3a2;"
+      "text-decoration:none}</style></head><body><div class='wrap'>"
+      "<div class='card'><div class='bar'></div><h2>";
+  h += title;
+  h += "</h2><p>";
+  h += body;
+  h += "</p><p><a href='/'>&larr; Zur&uuml;ck</a></p></div></div>"
+       "</body></html>";
+  return h;
+}
+
 void WebUpdateService::handleRoot() {
+  if (_customPage) {
+    _server.send(200, "text/html", _customPage);
+    return;
+  }
   String html =
       "<!DOCTYPE html><html><head><meta charset='utf-8'>"
       "<meta name='viewport' content='width=device-width,initial-scale=1'>"
@@ -186,40 +211,38 @@ void WebUpdateService::handleStoreDone() {
   const char *info =
       (_store && _store->resultText) ? _store->resultText() : "";
   if (_storeOk) {
-    String html = "<h2>Image gespeichert.</h2><p>";
-    html += info;
-    html += "</p><p><a href='/'>Zur&uuml;ck</a></p>";
-    _server.send(200, "text/html", html);
+    _server.send(200, "text/html", resultPage("Image gespeichert", info));
   } else {
-    String html =
-        "<h2>Image abgelehnt.</h2><p>Kein g&uuml;ltiges "
-        "Infinitag-Firmware-Image (Marker fehlt) oder Speicherfehler. ";
-    html += info;
-    html += "</p><p><a href='/'>Zur&uuml;ck</a></p>";
-    _server.send(400, "text/html", html);
+    String body =
+        "Kein g&uuml;ltiges Infinitag-Firmware-Image (Marker fehlt) oder "
+        "Speicherfehler. ";
+    body += info;
+    _server.send(400, "text/html", resultPage("Image abgelehnt", body));
   }
 }
 
 void WebUpdateService::handleUploadDone() {
   if (_done) {
     _server.send(200, "text/html",
-                 "<h2>Update OK &ndash; Ger&auml;t startet neu.</h2>");
+                 resultPage("Update OK",
+                            "Das Ger&auml;t startet jetzt automatisch neu."));
   } else if (_wrongFile) {
-    String html =
-        "<h2>Falsche Firmware-Datei!</h2><p>Dieses Ger&auml;t ist <b>";
-    html += _label;
-    html += "</b> und erwartet <b>";
-    html += _prefix;
-    html +=
-        "-vX.Y.Z.bin</b>. Es wurde nichts geflasht &ndash; zur&uuml;ck "
-        "und die passende Datei w&auml;hlen.</p>";
-    _server.send(400, "text/html", html);
+    String body = "Dieses Ger&auml;t ist <b>";
+    body += _label;
+    body += "</b> und erwartet <b>";
+    body += _prefix;
+    body +=
+        "-vX.Y.Z.bin</b>. Es wurde nichts geflasht &ndash; bitte die "
+        "passende Datei w&auml;hlen.";
+    _server.send(400, "text/html",
+                 resultPage("Falsche Firmware-Datei", body));
     _wrongFile = false;  // allow a retry without reboot
     _failed = false;
   } else {
-    _server.send(500, "text/html",
-                 "<h2>Update fehlgeschlagen &ndash; alte Firmware bleibt "
-                 "aktiv. Zur&uuml;ck und erneut versuchen.</h2>");
+    _server.send(
+        500, "text/html",
+        resultPage("Update fehlgeschlagen",
+                   "Alte Firmware bleibt aktiv. Bitte erneut versuchen."));
     _failed = false;  // allow a retry without reboot
   }
 }
