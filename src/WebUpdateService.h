@@ -18,7 +18,15 @@ class WebUpdateService {
  public:
   // apName: open SoftAP SSID, e.g. "infinitag-sta-220AAC".
   // fwVersion: running version shown on the upload page, e.g. "0.2.0".
-  bool begin(const char *apName, const char *fwVersion);
+  // deviceLabel: shown prominently on the page ("Station 220AAC") so the
+  //   user always sees WHICH device they are about to flash.
+  // filePrefix: expected firmware file name prefix ("infinitag-station");
+  //   uploads whose name does not start with it are rejected. This guards
+  //   against flashing the wrong device type with the SAME chip – images
+  //   for a different chip are already rejected by the IDF image check
+  //   (chip id) at Update.end().
+  bool begin(const char *apName, const char *fwVersion,
+             const char *deviceLabel, const char *filePrefix);
 
   // Service HTTP; call every loop() iteration while the mode is active.
   void loop();
@@ -41,9 +49,12 @@ class WebUpdateService {
 
   WebServer _server{80};
   char _version[16] = "?";
+  char _label[32] = "?";
+  char _prefix[32] = "";
   bool _uploading = false;
   bool _done = false;
   bool _failed = false;
+  bool _wrongFile = false;  // rejected because the file name did not match
 };
 
 #endif  // ARDUINO
