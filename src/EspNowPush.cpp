@@ -166,6 +166,8 @@ void EspNowPushReceiver::finishWindow() {
     _bytesDone += n;
   }
   sendAck(_window, 0, PUSH_ACK_WINDOW);  // window complete
+  delay(2);
+  sendAck(_window, 0, PUSH_ACK_WINDOW);  // twice – a lost ack stalls all
   _window++;
   _haveMask = 0;
 }
@@ -189,8 +191,18 @@ void EspNowPushReceiver::loop() {
     _lastRxMs = millis();
     const uint32_t frameIdx = rdU32(frame.data + 4);
     const uint32_t first = (uint32_t)_window * PUSH_WINDOW_FRAMES;
-    if (frameIdx < first || frameIdx >= first + PUSH_WINDOW_FRAMES) {
-      continue;  // stale frame from an already flashed window
+    if (frameIdx < first) {
+      // Frame of an already flashed window: our window ack got lost and
+      // the sender is retransmitting. Re-ack that window (throttled) so
+      // the sender advances instead of giving up after its retries.
+      if (millis() - _lastAckMs > 100) {
+        sendAck((uint16_t)(frameIdx / PUSH_WINDOW_FRAMES), 0,
+                PUSH_ACK_WINDOW);
+      }
+      continue;
+    }
+    if (frameIdx >= first + PUSH_WINDOW_FRAMES) {
+      continue;  // frame from a future window (should not happen)
     }
     const uint32_t i = frameIdx - first;
     const size_t n = frame.len - RAW_HDR;
@@ -313,6 +325,7 @@ void EspNowPushSender::onControl(const RxPacket &rx) {
     return;
   }
   if (a.status != PUSH_ACK_WINDOW) {  // final error / busy
+    Serial.printf("[PUSH] Geraet meldet Fehler-Status %u\n", a.status);
     _finalStatus = a.status;
     _state = FAILED;
     return;
@@ -347,6 +360,8 @@ void EspNowPushSender::loop() {
 
   // no (or lost) ack – retry the current step
   if (++_retries > 20) {
+    Serial.printf("[PUSH] Abbruch: keine Antwort (Fenster %u/%u, End=%d)\n",
+                  _window, _windows, _endSent);
     _finalStatus = 0xFE;  // give-up marker: device unreachable
     _state = FAILED;
     return;

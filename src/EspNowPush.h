@@ -70,8 +70,10 @@ class EspNowPushReceiver {
   uint32_t _lastRxMs = 0;
   uint32_t _lastAckMs = 0;
 
-  // small ring buffer filled from the WiFi task, drained in loop()
-  static constexpr size_t QUEUE = 8;
+  // Ring buffer filled from the WiFi task, drained in loop(). Sized for
+  // more than one full window: the receiver's OLED redraw blocks ~100 ms
+  // in which a whole 16-frame burst can arrive.
+  static constexpr size_t QUEUE = 24;
   struct RawFrame {
     uint8_t len;
     uint8_t data[250];
