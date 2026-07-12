@@ -74,6 +74,7 @@ void WebUpdateService::handleRoot() {
         "<p><input type='submit' value='Image speichern'></p>"
         "</form>";
   }
+  if (_extraHtml) html += _extraHtml;
   html += "</body></html>";
   _server.send(200, "text/html", html);
 }

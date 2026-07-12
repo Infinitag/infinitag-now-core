@@ -45,6 +45,11 @@ class WebUpdateService {
   // Enable the second "store device image" form (call before begin()).
   void setStoreHooks(const StoreHooks *hooks) { _store = hooks; }
 
+  // Extra HTML appended to the root page (e.g. the box's WLAN form) and
+  // access to the server for registering additional routes (after begin()).
+  void setExtraHtml(const char *html) { _extraHtml = html; }
+  WebServer &server() { return _server; }
+
   // Service HTTP; call every loop() iteration while the mode is active.
   void loop();
 
@@ -76,6 +81,7 @@ class WebUpdateService {
   bool _wrongFile = false;  // rejected because the file name did not match
 
   const StoreHooks *_store = nullptr;
+  const char *_extraHtml = nullptr;
   bool _storeActive = false;  // hooks->begin() succeeded for this upload
   bool _storeOk = false;      // last store upload accepted
 };
