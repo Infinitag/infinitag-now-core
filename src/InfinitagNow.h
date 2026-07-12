@@ -1,9 +1,10 @@
 // InfinitagNow – shared ESP-NOW protocol definitions for the Infinitag system.
 //
-// Implements the packet format frozen 2026-05-18, documented in
-// wissensbasis/12-refactor-station-v2.md §3.4–3.6. Pure C++ (no Arduino
-// dependencies) so it compiles natively for unit tests and can later be
-// reused by station and target firmware.
+// Protocol version 0x02 (2026-07-12): devices are identified solely by their
+// eFuse MAC – the human-managed station_id/target_id world and the whole
+// SETUP flow were removed. See PROTOCOL.md for the full specification.
+// Pure C++ (no Arduino dependencies) so it compiles natively for unit tests
+// and can be reused by station, target and config-box firmware.
 //
 // All multi-byte fields are little-endian (ESP32 native). Blob access uses
 // memcpy so the code is also correct on any test host.
@@ -16,25 +17,28 @@
 
 namespace inow {
 
-constexpr uint8_t PROTOCOL_VERSION = 0x01;
+constexpr uint8_t PROTOCOL_VERSION = 0x02;
 constexpr size_t PACKET_SIZE = 36;
 constexpr size_t PAYLOAD_SIZE = 26;
 constexpr size_t CONFIG_BLOB_MAX = 19;  // max blob bytes in DISCOVER_REPLY
 
-// --- Message types (Doc 12 §3.5) ------------------------------------------
+// --- Message types -----------------------------------------------------------
 enum MsgType : uint8_t {
   MSG_DISCOVER_REQ   = 0x01,  // Config-Box -> broadcast, payload[0] = device_type filter
   MSG_DISCOVER_REPLY = 0x02,  // device -> Config-Box (unicast)
   MSG_IDENTIFY       = 0x03,  // Config-Box -> device, payload[0] = duration in 100 ms
-  MSG_HIT_REPORT     = 0x10,  // target -> broadcast, payload[0] = sound_id
-  MSG_SETUP_BEGIN    = 0x20,  // Config-Box -> broadcast, payload[0] = timeout s
-  MSG_SETUP_TAKE     = 0x21,  // station -> broadcast, payload[0] = new station_id
+  MSG_HIT_REPORT     = 0x10,  // target -> broadcast, payload[0..5] = dest station MAC,
+                              //   payload[6] = sound_id (broadcast keeps the
+                              //   config box live monitor working)
   MSG_CFG_WRITE      = 0x30,  // Config-Box -> device (unicast), payload = config blob
   MSG_CFG_ACK        = 0x31,  // device -> Config-Box, payload[0] = AckStatus
-  MSG_CFG_TEST_SOUND = 0x32,  // Config-Box -> station, payload[0] = sound_id (play only, no persist)
+  MSG_CFG_TEST_SOUND = 0x32,  // Config-Box -> station, payload[0] = sound_id (play only)
   MSG_IR_SELECT_ECHO = 0xC0,  // reserved/latent (IR pointer), payload[0] = token
   MSG_DEBUG_CMD      = 0xF0,  // Config-Box -> device: payload[0] = DebugTest, payload[1] = parameter
   MSG_DEBUG_RESULT   = 0xF1,  // device -> Config-Box: payload[0] = DebugTest, payload[1] = DebugResult
+  MSG_UPDATE_BEGIN   = 0xF2,  // Config-Box -> device: enter SoftAP update mode,
+                              //   payload[0] = timeout in minutes (0 = default 5)
+  MSG_UPDATE_ACK     = 0xF3,  // device -> Config-Box: payload[0] = 0 OK (entering)
 };
 
 // --- Self-test catalog (MSG_DEBUG_CMD payload[0]) ---------------------------
@@ -63,8 +67,7 @@ enum DeviceType : uint8_t {
 
 // --- Header flags ----------------------------------------------------------
 enum : uint8_t {
-  FLAG_ACK_REQUIRED    = 0x01,
-  FLAG_SETUP_MODE_ONLY = 0x02,
+  FLAG_ACK_REQUIRED = 0x01,
 };
 
 // --- CFG_ACK status --------------------------------------------------------
@@ -74,23 +77,23 @@ enum AckStatus : uint8_t {
   ACK_NACK_VALIDATION  = 2,
 };
 
-// --- Wire format (fixed 36 bytes, Doc 12 §3.4) -----------------------------
+// --- Wire format (fixed 36 bytes) -------------------------------------------
+// Identity is the sender MAC from the ESP-NOW layer-2 header; the packet
+// itself carries no device ids since v0x02.
 typedef struct __attribute__((packed)) {
   uint8_t  version;      // PROTOCOL_VERSION
   uint8_t  msg_type;     // MsgType
   uint8_t  device_type;  // DeviceType of the *subject* of the message
-  uint8_t  station_id;   // 1..99, 0 = unset / not relevant
-  uint8_t  target_id;    // 1..99, 0 = unset / not relevant
   uint8_t  flags;
   uint8_t  token;        // random echo-protection token
-  uint8_t  reserved;     // = 0
+  uint8_t  reserved[3];  // = 0
   uint8_t  payload[PAYLOAD_SIZE];
   uint16_t crc16;        // CRC-16/CCITT-FALSE over bytes 0..33, little-endian
 } Packet;
 
 static_assert(sizeof(Packet) == PACKET_SIZE, "Packet must be exactly 36 bytes");
 
-// --- Config blobs (Doc 12 §3.6.2 / §3.6.3) ---------------------------------
+// --- Config blobs ------------------------------------------------------------
 
 // LED channel mask for the wand status colors (SK6812 RGBW).
 // Any non-empty combination of the four dies is a valid color (1..15).
@@ -103,17 +106,14 @@ enum LedChannel : uint8_t {
 };
 
 struct StationConfig {
-  uint8_t station_id = 1;
   uint8_t volume_pct = 80;
-  uint8_t default_setup_sound = 13;
-  uint8_t led_ready = LED_G;  // wand color when ready to fire (added 2026-07-11)
+  uint8_t led_ready = LED_G;  // wand color when ready to fire
   uint8_t led_busy = LED_R;   // wand color while busy (audio playing etc.)
 };
 constexpr size_t STATION_BLOB_SIZE = 16;
 
 struct TargetConfig {
-  uint8_t  target_id = 1;
-  uint8_t  station_id = 1;
+  uint8_t  station_mac[6] = {0};  // station that plays this target's sound
   uint8_t  sound_id = 1;
   uint16_t hit_time_ms = 10000;
   uint16_t cooldown_ms = 2000;
@@ -122,7 +122,7 @@ struct TargetConfig {
 };
 constexpr size_t TARGET_BLOB_SIZE = 16;
 
-// --- DISCOVER_REPLY payload (Doc 12 §3.6.1) --------------------------------
+// --- DISCOVER_REPLY payload --------------------------------------------------
 struct DiscoverReply {
   uint8_t  fw_major = 0;
   uint8_t  fw_minor = 0;
@@ -153,6 +153,12 @@ void encodeStationConfig(const StationConfig &c, uint8_t *blob);
 void decodeStationConfig(const uint8_t *blob, size_t len, StationConfig &c);
 void encodeTargetConfig(const TargetConfig &c, uint8_t *blob);
 void decodeTargetConfig(const uint8_t *blob, size_t len, TargetConfig &c);
+
+// HIT_REPORT payload: [0..5] = destination station MAC, [6] = sound_id.
+void encodeHitReport(const uint8_t stationMac[6], uint8_t soundId,
+                     uint8_t *payload);
+void decodeHitReport(const uint8_t *payload, uint8_t stationMac[6],
+                     uint8_t &soundId);
 
 // DISCOVER_REPLY payload encode/decode (into/from Packet::payload).
 void encodeDiscoverReply(const DiscoverReply &r, uint8_t *payload);

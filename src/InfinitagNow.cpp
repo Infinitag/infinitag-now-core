@@ -41,47 +41,55 @@ static uint16_t getU16(const uint8_t *src) {
   return static_cast<uint16_t>(src[0]) | (static_cast<uint16_t>(src[1]) << 8);
 }
 
-// --- station blob (Doc 12 §3.6.2) -------------------------------------------
+// --- station blob (PROTOCOL.md, v0x02 layout) --------------------------------
 void encodeStationConfig(const StationConfig &c, uint8_t *blob) {
   memset(blob, 0, STATION_BLOB_SIZE);
-  blob[0] = c.station_id;
-  blob[1] = c.volume_pct;
-  blob[2] = c.default_setup_sound;
-  blob[3] = c.led_ready;
-  blob[4] = c.led_busy;
+  blob[0] = c.volume_pct;
+  blob[1] = c.led_ready;
+  blob[2] = c.led_busy;
 }
 
 void decodeStationConfig(const uint8_t *blob, size_t len, StationConfig &c) {
   c = StationConfig{};
-  if (len >= 1) c.station_id = blob[0];
-  if (len >= 2) c.volume_pct = blob[1];
-  if (len >= 3) c.default_setup_sound = blob[2];
-  // 0 = written by a firmware that predates the field -> keep the default
-  if (len >= 4 && blob[3] != 0) c.led_ready = blob[3];
-  if (len >= 5 && blob[4] != 0) c.led_busy = blob[4];
+  if (len >= 1) c.volume_pct = blob[0];
+  // 0 = field not set (e.g. short blob) -> keep the default color
+  if (len >= 2 && blob[1] != 0) c.led_ready = blob[1];
+  if (len >= 3 && blob[2] != 0) c.led_busy = blob[2];
 }
 
-// --- target blob (Doc 12 §3.6.3) ---------------------------------------------
+// --- target blob (PROTOCOL.md, v0x02 layout) ----------------------------------
 void encodeTargetConfig(const TargetConfig &c, uint8_t *blob) {
   memset(blob, 0, TARGET_BLOB_SIZE);
-  blob[0] = c.target_id;
-  blob[1] = c.station_id;
-  blob[2] = c.sound_id;
-  putU16(blob + 3, c.hit_time_ms);
-  putU16(blob + 5, c.cooldown_ms);
-  blob[7] = c.sw_animation;
-  blob[8] = c.sw_channels;
+  memcpy(blob, c.station_mac, 6);
+  blob[6] = c.sound_id;
+  putU16(blob + 7, c.hit_time_ms);
+  putU16(blob + 9, c.cooldown_ms);
+  blob[11] = c.sw_animation;
+  blob[12] = c.sw_channels;
 }
 
 void decodeTargetConfig(const uint8_t *blob, size_t len, TargetConfig &c) {
   c = TargetConfig{};
-  if (len >= 1) c.target_id = blob[0];
-  if (len >= 2) c.station_id = blob[1];
-  if (len >= 3) c.sound_id = blob[2];
-  if (len >= 5) c.hit_time_ms = getU16(blob + 3);
-  if (len >= 7) c.cooldown_ms = getU16(blob + 5);
-  if (len >= 8) c.sw_animation = blob[7];
-  if (len >= 9) c.sw_channels = blob[8];
+  if (len >= 6) memcpy(c.station_mac, blob, 6);
+  if (len >= 7) c.sound_id = blob[6];
+  if (len >= 9) c.hit_time_ms = getU16(blob + 7);
+  if (len >= 11) c.cooldown_ms = getU16(blob + 9);
+  if (len >= 12) c.sw_animation = blob[11];
+  if (len >= 13) c.sw_channels = blob[12];
+}
+
+// --- HIT_REPORT payload -------------------------------------------------------
+void encodeHitReport(const uint8_t stationMac[6], uint8_t soundId,
+                     uint8_t *payload) {
+  memset(payload, 0, PAYLOAD_SIZE);
+  memcpy(payload, stationMac, 6);
+  payload[6] = soundId;
+}
+
+void decodeHitReport(const uint8_t *payload, uint8_t stationMac[6],
+                     uint8_t &soundId) {
+  memcpy(stationMac, payload, 6);
+  soundId = payload[6];
 }
 
 // --- DISCOVER_REPLY payload (Doc 12 §3.6.1) ----------------------------------
