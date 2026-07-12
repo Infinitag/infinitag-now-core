@@ -50,6 +50,14 @@ class WebUpdateService {
   void setExtraHtml(const char *html) { _extraHtml = html; }
   WebServer &server() { return _server; }
 
+  // Full replacement for the root page (the box serves its own designed
+  // page); the caller owns the buffer and keeps it alive/updated.
+  void setCustomPage(const char *html) { _customPage = html; }
+
+  // Small styled result page (dark Infinitag look) with a back link –
+  // shared so device-side handlers (e.g. /wifi on the box) match.
+  static String resultPage(const char *title, const String &body);
+
   // Service HTTP; call every loop() iteration while the mode is active.
   void loop();
 
@@ -82,6 +90,7 @@ class WebUpdateService {
 
   const StoreHooks *_store = nullptr;
   const char *_extraHtml = nullptr;
+  const char *_customPage = nullptr;
   bool _storeActive = false;  // hooks->begin() succeeded for this upload
   bool _storeOk = false;      // last store upload accepted
 };
