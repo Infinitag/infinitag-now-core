@@ -53,13 +53,14 @@ void EspNowPushReceiver::rawHandlerStatic(const uint8_t mac[6],
 }
 
 void EspNowPushReceiver::sendAck(uint16_t window, uint32_t missing,
-                                 uint8_t status) {
+                                 uint8_t status, uint8_t detail) {
   Packet p;
   init(p, MSG_PUSH_ACK, 0);  // device type irrelevant for the ack
   PushAck a;
   a.window = window;
   a.missing = missing;
   a.status = status;
+  a.detail = detail;
   encodePushAck(a, p.payload);
   _net->send(_srcMac, p);
   _lastAckMs = millis();
@@ -71,9 +72,10 @@ void EspNowPushReceiver::fail(uint8_t status) {
   strncpy(_updErrStr, Update.errorString(), sizeof(_updErrStr) - 1);
   Update.abort();
   _failCode = status;
-  sendAck(0xFFFF, 0, status);
+  // relay the update-library error number to the box (displayless targets!)
+  sendAck(0xFFFF, 0, status, _updErr);
   delay(2);
-  sendAck(0xFFFF, 0, status);  // twice – a lost error ack stalls the box
+  sendAck(0xFFFF, 0, status, _updErr);  // twice – a lost ack stalls the box
   _state = FAILED;
 }
 
@@ -334,8 +336,10 @@ void EspNowPushSender::onControl(const RxPacket &rx) {
     return;
   }
   if (a.status != PUSH_ACK_WINDOW) {  // final error / busy
-    Serial.printf("[PUSH] Geraet meldet Fehler-Status %u\n", a.status);
+    Serial.printf("[PUSH] Geraet meldet Fehler-Status %u (Detail %u)\n",
+                  a.status, a.detail);
     _finalStatus = a.status;
+    _finalDetail = a.detail;
     _state = FAILED;
     return;
   }

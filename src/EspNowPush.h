@@ -53,7 +53,8 @@ class EspNowPushReceiver {
   static void rawHandlerStatic(const uint8_t mac[6], const uint8_t *data,
                                int len);
   void onRawFrame(const uint8_t *data, int len);
-  void sendAck(uint16_t window, uint32_t missing, uint8_t status);
+  void sendAck(uint16_t window, uint32_t missing, uint8_t status,
+               uint8_t detail = 0);
   uint32_t windowExpectMask() const;
   void finishWindow();
   void fail(uint8_t status);
@@ -117,6 +118,8 @@ class EspNowPushSender {
   size_t bytesDone() const { return _ackedBytes; }
   size_t bytesTotal() const { return _size; }
   uint8_t finalStatus() const { return _finalStatus; }
+  // Update-library error number relayed by the device (0 = none)
+  uint8_t finalDetail() const { return _finalDetail; }
 
  private:
   void sendBegin();
@@ -142,6 +145,7 @@ class EspNowPushSender {
   uint32_t _deadline = 0;
   size_t _ackedBytes = 0;
   uint8_t _finalStatus = 0xFF;
+  uint8_t _finalDetail = 0;
 };
 
 #endif  // ARDUINO

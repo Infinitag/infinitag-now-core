@@ -70,6 +70,10 @@ struct PushAck {
   uint16_t window = 0;
   uint32_t missing = 0;  // bit i = frame window*PUSH_WINDOW_FRAMES+i missing
   uint8_t status = PUSH_ACK_WINDOW;
+  // Update-library error number of the device on FINAL_FLASH/FINAL_CRC –
+  // relayed to the box so failures are diagnosable without a display on
+  // the device (final targets have none).
+  uint8_t detail = 0;
 };
 
 // --- Self-test catalog (MSG_DEBUG_CMD payload[0]) ---------------------------

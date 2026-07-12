@@ -183,6 +183,7 @@ void test_push_ack_roundtrip() {
   in.window = 517;
   in.missing = 0x00010005;  // frames 0, 2 and 16 missing
   in.status = PUSH_ACK_WINDOW;
+  in.detail = 9;  // e.g. UPDATE_ERROR_ACTIVATE relayed to the box
   uint8_t payload[PAYLOAD_SIZE];
   encodePushAck(in, payload);
   PushAck out;
@@ -190,6 +191,7 @@ void test_push_ack_roundtrip() {
   TEST_ASSERT_EQUAL_UINT16(517, out.window);
   TEST_ASSERT_EQUAL_HEX32(0x00010005, out.missing);
   TEST_ASSERT_EQUAL_UINT8(PUSH_ACK_WINDOW, out.status);
+  TEST_ASSERT_EQUAL_UINT8(9, out.detail);
 }
 
 void test_blob_len_clamped() {
