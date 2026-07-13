@@ -142,10 +142,21 @@ enum LedChannel : uint8_t {
   LED_MASK_MAX = 0x0F,
 };
 
+// Laser behaviour on shots (station blob byte 3; 0 = unset -> default).
+enum LaserMode : uint8_t {
+  LASER_MODE_UNSET = 0,  // field not set -> receiver default (GLOW, 500 ms)
+  LASER_MODE_OFF = 1,    // laser never lights on shots
+  LASER_MODE_ON = 2,     // laser continuously on
+  LASER_MODE_GLOW = 3,   // on at the shot, afterglow of laser_glow x 500 ms
+};
+constexpr uint8_t LASER_GLOW_MAX = 20;  // 20 x 500 ms = 10 s
+
 struct StationConfig {
   uint8_t volume_pct = 80;
   uint8_t led_ready = LED_G;  // wand color when ready to fire
   uint8_t led_busy = LED_R;   // wand color while busy (audio playing etc.)
+  uint8_t laser_mode = LASER_MODE_GLOW;  // shot laser behaviour
+  uint8_t laser_glow = 1;                // afterglow in 500-ms steps (GLOW)
 };
 constexpr size_t STATION_BLOB_SIZE = 16;
 

@@ -127,7 +127,9 @@ vorbei über den Raw-Handler des `EspNowService`.
 | 0 | `volume_pct` | u8 | 80 |
 | 1 | `led_ready` | u8 | 0x02 (Grün) – Stab-Farbe „schussbereit", LED-Maske |
 | 2 | `led_busy` | u8 | 0x01 (Rot) – Stab-Farbe „beschäftigt" (z. B. Audio spielt), LED-Maske |
-| 3–15 | reserviert (0) | | |
+| 3 | `laser_mode` | u8 | 3 – Schuss-Laser: 0 = nicht gesetzt (→ Default), 1 = aus, 2 = dauerhaft an, 3 = Nachleuchten |
+| 4 | `laser_glow` | u8 | 1 – Nachleuchtdauer in 500-ms-Schritten (nur `laser_mode` = 3; Clamp 20 = 10 s) |
+| 5–15 | reserviert (0) | | |
 
 **LED-Maske:** Kanal-Bitmaske der SK6812-RGBW-Dies – bit0 = R, bit1 = G,
 bit2 = B, bit3 = W. Gültig sind alle 15 nicht-leeren Kombinationen (1–15);
