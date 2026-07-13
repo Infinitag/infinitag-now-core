@@ -47,14 +47,18 @@ void encodeStationConfig(const StationConfig &c, uint8_t *blob) {
   blob[0] = c.volume_pct;
   blob[1] = c.led_ready;
   blob[2] = c.led_busy;
+  blob[3] = c.laser_mode;
+  blob[4] = c.laser_glow;
 }
 
 void decodeStationConfig(const uint8_t *blob, size_t len, StationConfig &c) {
   c = StationConfig{};
   if (len >= 1) c.volume_pct = blob[0];
-  // 0 = field not set (e.g. short blob) -> keep the default color
+  // 0 = field not set (e.g. short blob / old sender) -> keep the default
   if (len >= 2 && blob[1] != 0) c.led_ready = blob[1];
   if (len >= 3 && blob[2] != 0) c.led_busy = blob[2];
+  if (len >= 4 && blob[3] != 0) c.laser_mode = blob[3];
+  if (len >= 5 && blob[4] != 0) c.laser_glow = blob[4];
 }
 
 // --- target blob (PROTOCOL.md, v0x02 layout) ----------------------------------
