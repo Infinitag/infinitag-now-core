@@ -51,6 +51,8 @@ void test_station_blob_roundtrip() {
   in.volume_pct = 55;
   in.led_ready = LED_R | LED_W;   // red + white die
   in.led_busy = LED_B;
+  in.laser_mode = LASER_MODE_ON;
+  in.laser_glow = 4;              // 2 s
   uint8_t blob[STATION_BLOB_SIZE];
   encodeStationConfig(in, blob);
   StationConfig out;
@@ -58,6 +60,19 @@ void test_station_blob_roundtrip() {
   TEST_ASSERT_EQUAL_UINT8(55, out.volume_pct);
   TEST_ASSERT_EQUAL_UINT8(LED_R | LED_W, out.led_ready);
   TEST_ASSERT_EQUAL_UINT8(LED_B, out.led_busy);
+  TEST_ASSERT_EQUAL_UINT8(LASER_MODE_ON, out.laser_mode);
+  TEST_ASSERT_EQUAL_UINT8(4, out.laser_glow);
+}
+
+void test_station_blob_laser_defaults() {
+  // Old sender: bytes 3/4 are zero -> receiver keeps the defaults
+  // (afterglow 500 ms), so pre-laser boxes stay compatible.
+  uint8_t blob[STATION_BLOB_SIZE] = {0};
+  blob[0] = 80;
+  StationConfig out;
+  decodeStationConfig(blob, sizeof(blob), out);
+  TEST_ASSERT_EQUAL_UINT8(LASER_MODE_GLOW, out.laser_mode);
+  TEST_ASSERT_EQUAL_UINT8(1, out.laser_glow);
 }
 
 void test_station_blob_zero_led_falls_back() {
@@ -210,6 +225,7 @@ int main() {
   RUN_TEST(test_validate_rejects_corruption);
   RUN_TEST(test_validate_rejects_wrong_version);
   RUN_TEST(test_station_blob_roundtrip);
+  RUN_TEST(test_station_blob_laser_defaults);
   RUN_TEST(test_station_blob_zero_led_falls_back);
   RUN_TEST(test_target_blob_roundtrip);
   RUN_TEST(test_target_blob_endianness);
