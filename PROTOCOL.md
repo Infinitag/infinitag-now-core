@@ -74,8 +74,16 @@ eigenen MAC entspricht. Broadcast statt Unicast ist Absicht: so sieht der
 | 3 | Laser | Sekunden an (max. 10, Auto-Aus) | OK (Sichtprüfung) |
 | 4 | IR-Burst | Burst-Dauer in ms | OK = TSOP hat den eigenen Burst empfangen, FAIL = nicht |
 | 5 | Trigger-Test | Timeout in Sekunden | OK sobald Trigger gedrückt, sonst TIMEOUT |
+| 6 | Kalibriermodus | Minuten an (0 = aus, Clamp 60) | OK bei Zustandswechsel |
 
 Unbekannte Test-Nummern beantwortet das Gerät mit UNSUPPORTED.
+
+**Kalibriermodus (Test 6):** Laser und IR-LED-Treiber leuchten dauerhaft
+(kein 38-kHz-Burst-Muster) – zum optischen Ausrichten wird die IR-LED
+vorübergehend gegen eine weiße LED getauscht, Optik zentriert, danach
+zurückgetauscht. Das Gerät beendet den Modus selbst nach Ablauf der
+Minuten (Auto-Aus); `param = 0` beendet sofort. Schuss-Trigger ist im
+Kalibriermodus gesperrt.
 
 ### Update-Modus (`UPDATE_BEGIN`)
 

@@ -83,6 +83,8 @@ enum DebugTest : uint8_t {
   DBG_LASER   = 3,  // param = seconds on (auto-off, clamped to 10)
   DBG_IR      = 4,  // param = burst ms; result = TSOP self-reception
   DBG_TRIGGER = 5,  // param = timeout s; result when trigger pressed / timeout
+  DBG_CALIBRATE = 6,  // param = minutes on (0 = off, clamp 60): laser + IR
+                      // LED continuously on for optics alignment
 };
 
 enum DebugResult : uint8_t {
