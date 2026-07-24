@@ -50,6 +50,50 @@ void test_validate_rejects_wrong_version() {
   TEST_ASSERT_FALSE(validate(reinterpret_cast<uint8_t *>(&p), sizeof(p)));
 }
 
+void test_rescue_messages_pass_any_version() {
+  // Rescue anchor: DISCOVER_REQ/REPLY + UPDATE_BEGIN/ACK must validate
+  // regardless of the version byte (past 0x02 and hypothetical future 0x7F).
+  const uint8_t msgs[] = {MSG_DISCOVER_REQ, MSG_DISCOVER_REPLY,
+                          MSG_UPDATE_BEGIN, MSG_UPDATE_ACK};
+  const uint8_t versions[] = {0x01, 0x02, 0x7F};
+  for (uint8_t m : msgs) {
+    for (uint8_t v : versions) {
+      Packet p;
+      init(p, m, DEV_STATION);
+      p.version = v;
+      seal(p);
+      TEST_ASSERT_TRUE(validate(reinterpret_cast<uint8_t *>(&p), sizeof(p)));
+      TEST_ASSERT_TRUE(isRescueMsg(m));
+    }
+  }
+}
+
+void test_rescue_still_requires_crc() {
+  // The version tolerance must NOT weaken the CRC check.
+  Packet p;
+  init(p, MSG_UPDATE_BEGIN, DEV_TARGET);
+  p.version = 0x02;
+  p.payload[0] = 5;
+  seal(p);
+  uint8_t buf[sizeof(Packet)];
+  memcpy(buf, &p, sizeof(p));
+  buf[9] ^= 0xFF;
+  TEST_ASSERT_FALSE(validate(buf, sizeof(buf)));
+}
+
+void test_non_rescue_messages_stay_version_locked() {
+  const uint8_t msgs[] = {MSG_HIT_REPORT, MSG_CFG_WRITE, MSG_CFG_ACK,
+                          MSG_DEBUG_CMD, MSG_PUSH_BEGIN};
+  for (uint8_t m : msgs) {
+    TEST_ASSERT_FALSE(isRescueMsg(m));
+    Packet p;
+    init(p, m, DEV_STATION);
+    p.version = 0x02;
+    seal(p);
+    TEST_ASSERT_FALSE(validate(reinterpret_cast<uint8_t *>(&p), sizeof(p)));
+  }
+}
+
 void test_station_blob_roundtrip() {
   StationConfig in;
   in.volume_pct = 55;
@@ -364,6 +408,9 @@ int main() {
   RUN_TEST(test_seal_and_validate);
   RUN_TEST(test_validate_rejects_corruption);
   RUN_TEST(test_validate_rejects_wrong_version);
+  RUN_TEST(test_rescue_messages_pass_any_version);
+  RUN_TEST(test_rescue_still_requires_crc);
+  RUN_TEST(test_non_rescue_messages_stay_version_locked);
   RUN_TEST(test_station_blob_roundtrip);
   RUN_TEST(test_station_blob_ir_id_zero_is_valid);
   RUN_TEST(test_station_blob_laser_defaults);

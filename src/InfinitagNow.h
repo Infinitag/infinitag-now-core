@@ -204,7 +204,16 @@ void init(Packet &p, uint8_t msgType, uint8_t deviceType);
 // Computes and stores the CRC. Call after all fields are filled, before send.
 void seal(Packet &p);
 
+// Rescue anchor (PROTOCOL.md): these four messages are accepted from ANY
+// protocol version so a newer config box can always FIND older devices
+// (DISCOVER) and send them into the SoftAP update mode (UPDATE) - without
+// this, a protocol break would strand closed devices until a USB cable is
+// attached. Their payload semantics and the packet header/CRC layout are
+// FROZEN across protocol versions.
+bool isRescueMsg(uint8_t msgType);
+
 // Length, version and CRC check. Returns true for a valid Infinitag packet.
+// Rescue messages (isRescueMsg) pass the version check for any version.
 bool validate(const uint8_t *data, size_t len);
 
 // Blob encode/decode. Encode writes exactly *_BLOB_SIZE bytes.

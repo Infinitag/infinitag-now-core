@@ -63,6 +63,35 @@ wird dem `recv_cb` mitgegeben – sie fährt nicht im Payload mit.
 Reserviert: 0x40–0x4F (Reads), 0x80–0xBF (Telemetrie), 0xF7–0xFF (Debug/OTA).
 Entfallen seit v0x02: 0x20 `SETUP_BEGIN`, 0x21 `SETUP_TAKE`.
 
+### Versions-toleranter Rettungsanker (seit 2026-07-24)
+
+Vier Nachrichten passieren die Versionsprüfung in `validate()` mit
+**jedem** `version`-Byte (`isRescueMsg()`): `DISCOVER_REQ`,
+`DISCOVER_REPLY`, `UPDATE_BEGIN`, `UPDATE_ACK`. Damit kann eine neuere
+Config-Box ältere Geräte auch über einen Protokollbruch hinweg **finden**
+und in den SoftAP-Update-Modus **schicken** – ohne diesen Anker würde
+ein Versionssprung verbaute Geräte vom Funk-Update aussperren (USB-Zwang;
+genau das ist bei der v0x02→v0x03-Migration einmal passiert).
+
+Dafür sind folgende Punkte **über alle künftigen Protokollversionen
+eingefroren** und dürfen nie geändert werden:
+
+- Paketlänge 36 Byte, Header-Layout Bytes 0–7, CRC-16-Verfahren und
+  -Position (Bytes 34–35) – die CRC-Prüfung gilt unverändert auch für
+  Rettungsanker-Pakete.
+- `DISCOVER_REQ`: `[0]` = device_type-Filter.
+- `DISCOVER_REPLY`: `[0..2]` = fw_version, `[3]` = rssi_self,
+  `[4..5]` = uptime_min. (Der Config-Blob ab `[6]` ist **nicht**
+  eingefroren – bei fremder Version darf er nicht interpretiert werden!)
+- `UPDATE_BEGIN`: `[0]` = Timeout in Minuten. `UPDATE_ACK`: `[0]` = 0.
+
+Alle anderen Nachrichten (Config, Treffer, Debug, `PUSH_*`) bleiben
+versionsgesperrt – der Rettungsweg für fremde Versionen ist immer der
+**SoftAP-Upload**, nicht der Funk-Push. Die Config-Box markiert Geräte
+fremder Protokollversion in der Liste (`!`) und bietet für sie nur
+„Update (OTA)" an. Gilt ab Firmwares mit Core ≥ v3.1.0 – Geräte, die
+noch ohne den Anker gebaut wurden, bleiben rückwirkend unerreichbar.
+
 ### `HIT_REPORT`-Routing (dynamisch seit v0x03)
 
 Die schießende Station codiert ihre `ir_id` als `shooter_id` ins
@@ -216,5 +245,8 @@ Geräte-Repos pinnen `lib_deps` auf den Tag.
 
 **Migration v0x02 → v0x03 (Flag-Day):** Empfänger verwerfen fremde
 Versionen am ersten Byte, und der v0x02-Burst triggert den
-Telegramm-Decoder nicht – alle Geräte (Config-Box zuerst, dann Stationen
-und Targets) müssen gemeinsam aktualisiert werden.
+Telegramm-Decoder nicht – alle Geräte mussten gemeinsam aktualisiert
+werden (Geräte zuerst, Box zuletzt). **Künftige Versionssprünge
+brauchen dank des Rettungsankers (oben) keine Reihenfolge mehr:** Die
+Box findet Geräte jeder Version und schickt sie per `UPDATE_BEGIN` in
+den SoftAP-Update-Modus.
