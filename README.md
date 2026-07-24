@@ -9,7 +9,7 @@ für Funk und Firmware-Updates. Die verbindliche Spezifikation steht in
 ![Plattform](https://img.shields.io/badge/Plattform-ESP32%20%2F%20nativ-blue)
 ![Framework](https://img.shields.io/badge/Framework-Arduino%20%2F%20PlatformIO-orange)
 ![Protokoll](https://img.shields.io/badge/Protokoll-v0x02-purple)
-![Lizenz](https://img.shields.io/badge/Lizenz-CC%20BY--NC--SA%204.0-lightgrey)
+![Lizenz](https://img.shields.io/badge/Lizenz-PolyForm%20NC%201.0.0-lightgrey)
 
 ## Inhalt
 
@@ -63,7 +63,8 @@ Geräte-Repos.
 
 ## Lizenz
 
-[CC BY-NC-SA 4.0](https://creativecommons.org/licenses/by-nc-sa/4.0/) – Tobias Stewen.
+[PolyForm Noncommercial 1.0.0](LICENSE) – © 2026 Tobias Stewen.
+Kommerzielle Nutzung nur mit Genehmigung: info@hallow-tech.de.
 Teil von [Infinitag Now](https://github.com/Infinitag/infinitag-now),
 einem Zauberstab-Spiel als komplette Neuentwicklung – Ursprung des
 Namens: das Lasertag-Projekt [Infinitag](https://github.com/Infinitag) (2017).
