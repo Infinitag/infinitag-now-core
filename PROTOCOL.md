@@ -202,7 +202,8 @@ vorbei über den Raw-Handler des `EspNowService`.
 | 3 | `laser_mode` | u8 | 3 – Schuss-Laser: 0 = nicht gesetzt (→ Default), 1 = aus, 2 = dauerhaft an, 3 = Nachleuchten |
 | 4 | `laser_glow` | u8 | 1 – Nachleuchtdauer in 500-ms-Schritten (nur `laser_mode` = 3; Clamp 20 = 10 s) |
 | 5 | `ir_id` | u8 | 0 – Schützen-ID im IR-Telegramm (0–15; **0 ist gültig** = Werksgruppe, kein Unset-Wert) |
-| 6–15 | reserviert (0) | | |
+| 6 | `led_bright_pct` | u8 | 100 – Stab-LED-Helligkeit in % (1–100; 0 = nicht gesetzt → Default) |
+| 7–15 | reserviert (0) | | |
 
 **LED-Maske:** Kanal-Bitmaske der SK6812-RGBW-Dies – bit0 = R, bit1 = G,
 bit2 = B, bit3 = W. Gültig sind alle 15 nicht-leeren Kombinationen (1–15);
@@ -220,7 +221,8 @@ aus dem IR-Telegramm.
 | 3–4 | `cooldown_ms` | u16 | 2000 |
 | 5 | `sw_animation` | u8 | 0 |
 | 6 | `sw_channels` | u8 | 0b111 (bit0 = SW1, bit1 = SW_5V, bit2 = SW_3V3) |
-| 7–15 | reserviert (0) | | (Reserve u. a. für Hitpoints) |
+| 7 | `led_bright_pct` | u8 | 100 – Ring-Helligkeit in % (1–100; 0 = nicht gesetzt → Default) |
+| 8–15 | reserviert (0) | | (Reserve u. a. für Hitpoints) |
 
 ## Kern-Flows (Kurzform)
 

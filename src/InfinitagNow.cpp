@@ -55,6 +55,7 @@ void encodeStationConfig(const StationConfig &c, uint8_t *blob) {
   blob[3] = c.laser_mode;
   blob[4] = c.laser_glow;
   blob[5] = c.ir_id;
+  blob[6] = c.led_bright_pct;
 }
 
 void decodeStationConfig(const uint8_t *blob, size_t len, StationConfig &c) {
@@ -67,6 +68,7 @@ void decodeStationConfig(const uint8_t *blob, size_t len, StationConfig &c) {
   if (len >= 5 && blob[4] != 0) c.laser_glow = blob[4];
   // ir_id 0 is a valid value (factory group), no unset semantics here
   if (len >= 6) c.ir_id = blob[5] & 0x0F;
+  if (len >= 7 && blob[6] != 0) c.led_bright_pct = blob[6];
 }
 
 // --- target blob (PROTOCOL.md, v0x03 layout) ----------------------------------
@@ -77,6 +79,7 @@ void encodeTargetConfig(const TargetConfig &c, uint8_t *blob) {
   putU16(blob + 3, c.cooldown_ms);
   blob[5] = c.sw_animation;
   blob[6] = c.sw_channels;
+  blob[7] = c.led_bright_pct;
 }
 
 void decodeTargetConfig(const uint8_t *blob, size_t len, TargetConfig &c) {
@@ -86,6 +89,7 @@ void decodeTargetConfig(const uint8_t *blob, size_t len, TargetConfig &c) {
   if (len >= 5) c.cooldown_ms = getU16(blob + 3);
   if (len >= 6) c.sw_animation = blob[5];
   if (len >= 7) c.sw_channels = blob[6];
+  if (len >= 8 && blob[7] != 0) c.led_bright_pct = blob[7];
 }
 
 // --- CRC-32 (IEEE, reflected, bitwise – speed is irrelevant here) -------------

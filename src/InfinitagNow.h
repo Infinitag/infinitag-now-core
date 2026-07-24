@@ -169,6 +169,7 @@ struct StationConfig {
   uint8_t laser_mode = LASER_MODE_GLOW;  // shot laser behaviour
   uint8_t laser_glow = 1;                // afterglow in 500-ms steps (GLOW)
   uint8_t ir_id = 0;                     // shooter id in the IR telegram
+  uint8_t led_bright_pct = 100;  // wand LED brightness 1..100 (0 = unset)
 };
 constexpr size_t STATION_BLOB_SIZE = 16;
 
@@ -178,6 +179,7 @@ struct TargetConfig {
   uint16_t cooldown_ms = 2000;
   uint8_t  sw_animation = 0;
   uint8_t  sw_channels = 0b00000111;  // bit0=SW1, bit1=SW_5V, bit2=SW_3V3
+  uint8_t  led_bright_pct = 100;  // ring brightness 1..100 (0 = unset)
 };
 constexpr size_t TARGET_BLOB_SIZE = 16;
 
