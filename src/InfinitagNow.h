@@ -1,8 +1,11 @@
 // InfinitagNow – shared ESP-NOW protocol definitions for the Infinitag system.
 //
-// Protocol version 0x02 (2026-07-12): devices are identified solely by their
-// eFuse MAC – the human-managed station_id/target_id world and the whole
-// SETUP flow were removed. See PROTOCOL.md for the full specification.
+// Protocol version 0x03 (2026-07-24): the IR shot carries a data telegram
+// (see IrTelegram.h) with the firing station's ir_id – HIT_REPORT routing is
+// dynamic (any wand shoots any target), the static target->station MAC
+// assignment is gone. v0x02 (2026-07-12) removed user-assigned device ids;
+// devices are identified solely by their eFuse MAC. See PROTOCOL.md for the
+// full specification.
 // Pure C++ (no Arduino dependencies) so it compiles natively for unit tests
 // and can be reused by station, target and config-box firmware.
 //
@@ -17,7 +20,7 @@
 
 namespace inow {
 
-constexpr uint8_t PROTOCOL_VERSION = 0x02;
+constexpr uint8_t PROTOCOL_VERSION = 0x03;
 constexpr size_t PACKET_SIZE = 36;
 constexpr size_t PAYLOAD_SIZE = 26;
 constexpr size_t CONFIG_BLOB_MAX = 19;  // max blob bytes in DISCOVER_REPLY
@@ -27,9 +30,10 @@ enum MsgType : uint8_t {
   MSG_DISCOVER_REQ   = 0x01,  // Config-Box -> broadcast, payload[0] = device_type filter
   MSG_DISCOVER_REPLY = 0x02,  // device -> Config-Box (unicast)
   MSG_IDENTIFY       = 0x03,  // Config-Box -> device, payload[0] = duration in 100 ms
-  MSG_HIT_REPORT     = 0x10,  // target -> broadcast, payload[0..5] = dest station MAC,
-                              //   payload[6] = sound_id (broadcast keeps the
-                              //   config box live monitor working)
+  MSG_HIT_REPORT     = 0x10,  // target -> broadcast, payload[0] = shooter_id
+                              //   (ir_id from the IR telegram), payload[1] =
+                              //   sound_id, payload[2] = damage (broadcast
+                              //   keeps the config box live monitor working)
   MSG_CFG_WRITE      = 0x30,  // Config-Box -> device (unicast), payload = config blob
   MSG_CFG_ACK        = 0x31,  // device -> Config-Box, payload[0] = AckStatus
   MSG_CFG_TEST_SOUND = 0x32,  // Config-Box -> station, payload[0] = sound_id (play only)
@@ -151,17 +155,24 @@ enum LaserMode : uint8_t {
 };
 constexpr uint8_t LASER_GLOW_MAX = 20;  // 20 x 500 ms = 10 s
 
+// IR id of a station: rides in the IR telegram as shooter_id, hits are
+// routed back by it (station plays HIT_REPORTs whose shooter_id matches its
+// own ir_id). 0 is a VALID value ("factory group"): out of the box every
+// station has ir_id 0 and plays hits of every other unconfigured station –
+// assign distinct ids (1..15) to separate multiple stations.
+constexpr uint8_t IR_ID_MAX = 15;
+
 struct StationConfig {
   uint8_t volume_pct = 80;
   uint8_t led_ready = LED_G;  // wand color when ready to fire
   uint8_t led_busy = LED_R;   // wand color while busy (audio playing etc.)
   uint8_t laser_mode = LASER_MODE_GLOW;  // shot laser behaviour
   uint8_t laser_glow = 1;                // afterglow in 500-ms steps (GLOW)
+  uint8_t ir_id = 0;                     // shooter id in the IR telegram
 };
 constexpr size_t STATION_BLOB_SIZE = 16;
 
 struct TargetConfig {
-  uint8_t  station_mac[6] = {0};  // station that plays this target's sound
   uint8_t  sound_id = 1;
   uint16_t hit_time_ms = 10000;
   uint16_t cooldown_ms = 2000;
@@ -211,11 +222,12 @@ void decodePushBegin(const uint8_t *payload, PushBegin &b);
 void encodePushAck(const PushAck &a, uint8_t *payload);
 void decodePushAck(const uint8_t *payload, PushAck &a);
 
-// HIT_REPORT payload: [0..5] = destination station MAC, [6] = sound_id.
-void encodeHitReport(const uint8_t stationMac[6], uint8_t soundId,
+// HIT_REPORT payload: [0] = shooter_id (ir_id from the IR telegram),
+// [1] = sound_id of the hit target, [2] = damage.
+void encodeHitReport(uint8_t shooterId, uint8_t soundId, uint8_t damage,
                      uint8_t *payload);
-void decodeHitReport(const uint8_t *payload, uint8_t stationMac[6],
-                     uint8_t &soundId);
+void decodeHitReport(const uint8_t *payload, uint8_t &shooterId,
+                     uint8_t &soundId, uint8_t &damage);
 
 // DISCOVER_REPLY payload encode/decode (into/from Packet::payload).
 void encodeDiscoverReply(const DiscoverReply &r, uint8_t *payload);

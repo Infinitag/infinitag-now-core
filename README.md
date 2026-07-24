@@ -8,7 +8,7 @@ für Funk und Firmware-Updates. Die verbindliche Spezifikation steht in
 
 ![Plattform](https://img.shields.io/badge/Plattform-ESP32%20%2F%20nativ-blue)
 ![Framework](https://img.shields.io/badge/Framework-Arduino%20%2F%20PlatformIO-orange)
-![Protokoll](https://img.shields.io/badge/Protokoll-v0x02-purple)
+![Protokoll](https://img.shields.io/badge/Protokoll-v0x03-purple)
 ![Lizenz](https://img.shields.io/badge/Lizenz-PolyForm%20NC%201.0.0-lightgrey)
 
 ## Inhalt
@@ -16,6 +16,7 @@ für Funk und Firmware-Updates. Die verbindliche Spezifikation steht in
 | Baustein | Datei | Zweck |
 |---|---|---|
 | Protokoll | `src/InfinitagNow.*` | Paketformat, CRC-16, Config-Blobs, Encode/Decode – **reines C++ ohne Arduino-Abhängigkeit**, nativ testbar |
+| IR-Telegramm | `src/IrTelegram.*` | Codec des IR-Schusses (Schützen-ID + Schaden + CRC-4): Sende-Timing-Tabelle + Empfangs-Decoder – **reines C++, nativ testbar** |
 | Funk-Service | `src/EspNowService.*` | ESP-NOW-Init, Peer-LRU, RX-Ringpuffer, CRC-Validierung (Arduino-only, `#ifdef`-gekapselt) |
 | Update-Service | `src/WebUpdateService.*` | SoftAP + Browser-Upload-Seite + OTA-Flash für alle Gerätetypen, inkl. Geräte-Label und Dateinamen-Check |
 | Spezifikation | [`PROTOCOL.md`](PROTOCOL.md) | Nachrichten, Blobs, Flows – die einzige verbindliche Quelle |
@@ -32,7 +33,7 @@ lib_deps =
     ; lokale Arbeitskopie (immer aktueller Stand, kein Cache-Drift):
     symlink:///Volumes/Basteln/Infinitag/repos/infinitag-now-core
     ; alternativ auf einen Versions-Tag pinnen:
-    ; https://github.com/Infinitag/infinitag-now-core.git#v2.0.0
+    ; https://github.com/Infinitag/infinitag-now-core.git#v3.0.0
 ```
 
 Solange das Repo privat ist, braucht die Git-Variante Org-Zugriff
@@ -50,7 +51,7 @@ Protokolländerung kommt mit angepassten Tests im selben Commit.
 ## Versionierung
 
 Das `version`-Byte im Paket-Header und die Tags dieses Repos bewegen
-sich zusammen: aktuell **0x02 ↔ `v2.x`**. Ein Protokollbruch erhöht
+sich zusammen: aktuell **0x03 ↔ `v3.x`**. Ein Protokollbruch erhöht
 beides (neues Major-Tag), die Geräte-Repos ziehen bewusst nach.
 Empfänger verwerfen Pakete fremder Versionen am ersten Byte.
 

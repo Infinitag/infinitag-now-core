@@ -1,11 +1,17 @@
-# Infinitag Now – ESP-NOW-Protokoll (Version 0x02)
+# Infinitag Now – ESP-NOW-Protokoll (Version 0x03)
 
 Verbindliche Spezifikation. Ausführliche Herleitung und Flows:
 Wissensbasis Doc 12 § 3 (Repo `infinitag-now`, `docs/`).
-V0x01 festgeschrieben 2026-05-18; **V0x02 seit 2026-07-12**: Geräte werden
+V0x01 festgeschrieben 2026-05-18. V0x02 seit 2026-07-12: Geräte werden
 ausschließlich über ihre eFuse-MAC identifiziert – `station_id`/`target_id`
-und der komplette Setup-Flow (`SETUP_BEGIN`/`SETUP_TAKE`) sind entfallen.
-Neu: `UPDATE_BEGIN`/`UPDATE_ACK` für den SoftAP-Firmware-Update-Modus.
+und der komplette Setup-Flow (`SETUP_BEGIN`/`SETUP_TAKE`) sind entfallen;
+neu waren `UPDATE_BEGIN`/`UPDATE_ACK` (SoftAP-Update) und `PUSH_*`
+(Funk-Update). **V0x03 seit 2026-07-24**: Der IR-Schuss ist ein
+**Datentelegramm** mit Schützen-ID (`ir_id` der Station) und Schadenswert
+statt eines rohen Bursts – Treffer werden **dynamisch** zur schießenden
+Station geroutet (jeder Zauberstab schießt auf jedes Target); die statische
+Target→Station-Zuordnung (`station_mac` im Target-Blob) ist entfallen.
+Spezifikation des IR-Telegramms: siehe unten.
 
 ## Grundlagen
 
@@ -22,7 +28,7 @@ Neu: `UPDATE_BEGIN`/`UPDATE_ACK` für den SoftAP-Firmware-Update-Modus.
 
 | Offset | Feld | Typ | Bedeutung |
 |---|---|---|---|
-| 0 | `version` | u8 | `0x02` |
+| 0 | `version` | u8 | `0x03` |
 | 1 | `msg_type` | u8 | siehe unten |
 | 2 | `device_type` | u8 | 1 = Station, 2 = Target, 3 = Config-Box, 0xFF = any |
 | 3 | `flags` | u8 | bit0 = ACK_REQUIRED |
@@ -41,7 +47,7 @@ wird dem `recv_cb` mitgegeben – sie fährt nicht im Payload mit.
 | 0x01 | `DISCOVER_REQ` | Config-Box → alle | Broadcast | `[0]` = device_type-Filter |
 | 0x02 | `DISCOVER_REPLY` | Gerät → Config-Box | Unicast | siehe unten |
 | 0x03 | `IDENTIFY` | Config-Box → Gerät | Unicast | `[0]` = Dauer in 100 ms (Default 7) |
-| 0x10 | `HIT_REPORT` | Target → alle | Broadcast | `[0..5]` = Ziel-Station-MAC, `[6]` = sound_id |
+| 0x10 | `HIT_REPORT` | Target → alle | Broadcast | `[0]` = shooter_id (`ir_id` aus dem IR-Telegramm), `[1]` = sound_id des Targets, `[2]` = damage |
 | 0x30 | `CFG_WRITE` | Config-Box → Gerät | Unicast | Config-Blob (siehe unten) |
 | 0x31 | `CFG_ACK` | Gerät → Config-Box | Unicast | `[0]`: 0 = OK, 1 = NACK Persist., 2 = NACK Valid. |
 | 0x32 | `CFG_TEST_SOUND` | Config-Box → Station | Unicast | `[0]` = sound_id, nur abspielen, nicht persistieren |
@@ -57,13 +63,50 @@ wird dem `recv_cb` mitgegeben – sie fährt nicht im Payload mit.
 Reserviert: 0x40–0x4F (Reads), 0x80–0xBF (Telemetrie), 0xF7–0xFF (Debug/OTA).
 Entfallen seit v0x02: 0x20 `SETUP_BEGIN`, 0x21 `SETUP_TAKE`.
 
-### `HIT_REPORT`-Routing
+### `HIT_REPORT`-Routing (dynamisch seit v0x03)
 
-Das Target speichert die MAC „seiner" Station (per Config-Box gesetzt,
-Auswahl aus der Discovery-Liste) und broadcastet den Treffer mit dieser
-Ziel-MAC im Payload. Stationen spielen nur, wenn `payload[0..5]` der
-eigenen MAC entspricht. Broadcast statt Unicast ist Absicht: so sieht der
+Die schießende Station codiert ihre `ir_id` als `shooter_id` ins
+IR-Telegramm. Das Target decodiert den Schuss, prüft die CRC und
+broadcastet den Treffer mit `shooter_id`, dem eigenen `sound_id` und dem
+empfangenen `damage`. **Stationen spielen, wenn `shooter_id` der eigenen
+`ir_id` entspricht** – so wandert der Treffer-Sound automatisch zu der
+Station, deren Zauberstab geschossen hat. Es gibt keine statische
+Target→Station-Zuordnung mehr; ein Target braucht ab Werk keinerlei
+Funk-Konfiguration. Broadcast statt Unicast ist Absicht: so sieht der
 **Live-Monitor der Config-Box** alle Treffer mit.
+
+`ir_id` 0 ist ein **gültiger Wert** („Werksgruppe"): Ab Werk haben alle
+Stationen `ir_id` 0 und spielen gegenseitig ihre Treffer – ein
+Einzelplatz-Aufbau funktioniert ohne Konfiguration. Bei mehreren
+Stationen vergibt die Config-Box eindeutige IDs (1–15).
+
+## IR-Telegramm (Schuss, seit v0x03)
+
+Physikalische Schicht: 38-kHz-Träger (TX ~33 % Duty), Empfang TSOP4138.
+Puls-Distanz-Codierung (Information in der Space-Länge), alle Zeiten µs:
+
+| Element | Mark (Träger an) | Space (Träger aus) |
+|---|---|---|
+| Header | 2400 | 600 |
+| Bit „0" | 600 | 600 |
+| Bit „1" | 600 | 1200 |
+| Stop | 600 | – |
+
+16 Datenbits, MSB zuerst:
+
+| Bits | Feld | Bedeutung |
+|---|---|---|
+| 15–12 | `irt_version` | `0x1` |
+| 11–8 | `shooter_id` | `ir_id` der schießenden Station (0–15) |
+| 7–4 | `damage` | Schadenswert (Sender clampt auf ≥ 1; Reserve für Hitpoints) |
+| 3–0 | `crc4` | CRC-4 (Poly x⁴+x+1, Init 0) über Bits 15–4 |
+
+Telegrammdauer 22,8–32,4 ms; mit Decode + `HIT_REPORT` + Sound-Start
+bleibt das Latenzbudget IR → Sound < 50 ms erfüllt. Empfänger-Toleranzen
+und Decoder-Zustandsmaschine: `src/IrTelegram.h` (nativ getestet).
+Fernbedienungen (NEC: 9-ms-Header, ~560-µs-Pulse) und der alte
+v0x02-Burst (5 ms) erzeugen keine gültigen Telegramme – ohne gültige CRC
+gibt es keinen Treffer.
 
 ### Selbsttest-Katalog (`DEBUG_CMD`, Station)
 
@@ -129,7 +172,8 @@ vorbei über den Raw-Handler des `EspNowService`.
 | 2 | `led_busy` | u8 | 0x01 (Rot) – Stab-Farbe „beschäftigt" (z. B. Audio spielt), LED-Maske |
 | 3 | `laser_mode` | u8 | 3 – Schuss-Laser: 0 = nicht gesetzt (→ Default), 1 = aus, 2 = dauerhaft an, 3 = Nachleuchten |
 | 4 | `laser_glow` | u8 | 1 – Nachleuchtdauer in 500-ms-Schritten (nur `laser_mode` = 3; Clamp 20 = 10 s) |
-| 5–15 | reserviert (0) | | |
+| 5 | `ir_id` | u8 | 0 – Schützen-ID im IR-Telegramm (0–15; **0 ist gültig** = Werksgruppe, kein Unset-Wert) |
+| 6–15 | reserviert (0) | | |
 
 **LED-Maske:** Kanal-Bitmaske der SK6812-RGBW-Dies – bit0 = R, bit1 = G,
 bit2 = B, bit3 = W. Gültig sind alle 15 nicht-leeren Kombinationen (1–15);
@@ -137,21 +181,24 @@ bit2 = B, bit3 = W. Gültig sind alle 15 nicht-leeren Kombinationen (1–15);
 
 ## Target-Config-Blob (16 Byte)
 
+Seit v0x03 ohne `station_mac` – das Routing läuft über die `shooter_id`
+aus dem IR-Telegramm.
+
 | Offset | Feld | Typ | Default |
 |---|---|---|---|
-| 0–5 | `station_mac` | u8[6] | 0 (ungesetzt → Treffer verpuffen) |
-| 6 | `sound_id` | u8 | 1 |
-| 7–8 | `hit_time_ms` | u16 | 10000 |
-| 9–10 | `cooldown_ms` | u16 | 2000 |
-| 11 | `sw_animation` | u8 | 0 |
-| 12 | `sw_channels` | u8 | 0b111 (bit0 = SW1, bit1 = SW_5V, bit2 = SW_3V3) |
-| 13–15 | reserviert (0) | | |
+| 0 | `sound_id` | u8 | 1 |
+| 1–2 | `hit_time_ms` | u16 | 10000 |
+| 3–4 | `cooldown_ms` | u16 | 2000 |
+| 5 | `sw_animation` | u8 | 0 |
+| 6 | `sw_channels` | u8 | 0b111 (bit0 = SW1, bit1 = SW_5V, bit2 = SW_3V3) |
+| 7–15 | reserviert (0) | | (Reserve u. a. für Hitpoints) |
 
 ## Kern-Flows (Kurzform)
 
-- **Spielbetrieb:** Target empfängt IR-Treffer → `HIT_REPORT` (Broadcast,
-  Ziel-MAC im Payload) → Station mit passender MAC spielt `sound_id`.
-  Ziel < 50 ms.
+- **Spielbetrieb:** Station schießt IR-Telegramm (eigene `ir_id` als
+  `shooter_id`) → Target decodiert + CRC-Check → `HIT_REPORT` (Broadcast:
+  shooter_id, sound_id, damage) → Station mit passender `ir_id` spielt
+  `sound_id`. Ziel < 50 ms.
 - **Discovery/Config:** `DISCOVER_REQ` → Replies (Unicast) → Liste →
   Cursor sendet alle 500 ms `IDENTIFY` (Gerät blinkt weiß, selbstlöschend
   nach 700 ms) → `CFG_WRITE` → Gerät persistiert NVS → `CFG_ACK`.
@@ -163,6 +210,11 @@ bit2 = B, bit3 = W. Gültig sind alle 15 nicht-leeren Kombinationen (1–15);
 
 ## Versionierung
 
-`version`-Byte 0x02 ↔ Tags `v2.x` dieses Repos.
+`version`-Byte 0x03 ↔ Tags `v3.x` dieses Repos.
 Inkompatible Änderung ⇒ `version`-Byte erhöhen + Major-Tag.
 Geräte-Repos pinnen `lib_deps` auf den Tag.
+
+**Migration v0x02 → v0x03 (Flag-Day):** Empfänger verwerfen fremde
+Versionen am ersten Byte, und der v0x02-Burst triggert den
+Telegramm-Decoder nicht – alle Geräte (Config-Box zuerst, dann Stationen
+und Targets) müssen gemeinsam aktualisiert werden.

@@ -1,8 +1,9 @@
-// Unit tests for the InfinitagNow protocol library (v0x02).
+// Unit tests for the InfinitagNow protocol library (v0x03).
 // Run on the PC:  pio test -e native
 
 #include <unity.h>
 #include "InfinitagNow.h"
+#include "IrTelegram.h"
 #include "SoundCatalog.h"
 
 using namespace inow;
@@ -38,10 +39,13 @@ void test_validate_rejects_corruption() {
 }
 
 void test_validate_rejects_wrong_version() {
-  // v0x01 packets (and any other version) must be dropped.
+  // v0x01/v0x02 packets (and any other version) must be dropped.
   Packet p;
   init(p, MSG_HIT_REPORT, DEV_TARGET);
   p.version = 0x01;
+  seal(p);
+  TEST_ASSERT_FALSE(validate(reinterpret_cast<uint8_t *>(&p), sizeof(p)));
+  p.version = 0x02;
   seal(p);
   TEST_ASSERT_FALSE(validate(reinterpret_cast<uint8_t *>(&p), sizeof(p)));
 }
@@ -53,6 +57,7 @@ void test_station_blob_roundtrip() {
   in.led_busy = LED_B;
   in.laser_mode = LASER_MODE_ON;
   in.laser_glow = 4;              // 2 s
+  in.ir_id = 7;
   uint8_t blob[STATION_BLOB_SIZE];
   encodeStationConfig(in, blob);
   StationConfig out;
@@ -62,6 +67,19 @@ void test_station_blob_roundtrip() {
   TEST_ASSERT_EQUAL_UINT8(LED_B, out.led_busy);
   TEST_ASSERT_EQUAL_UINT8(LASER_MODE_ON, out.laser_mode);
   TEST_ASSERT_EQUAL_UINT8(4, out.laser_glow);
+  TEST_ASSERT_EQUAL_UINT8(7, out.ir_id);
+}
+
+void test_station_blob_ir_id_zero_is_valid() {
+  // ir_id 0 = factory group, NOT "unset" – it must survive the roundtrip.
+  StationConfig in;
+  in.ir_id = 0;
+  uint8_t blob[STATION_BLOB_SIZE];
+  encodeStationConfig(in, blob);
+  StationConfig out;
+  out.ir_id = 9;  // stale value must be overwritten
+  decodeStationConfig(blob, sizeof(blob), out);
+  TEST_ASSERT_EQUAL_UINT8(0, out.ir_id);
 }
 
 void test_station_blob_laser_defaults() {
@@ -87,9 +105,7 @@ void test_station_blob_zero_led_falls_back() {
 }
 
 void test_target_blob_roundtrip() {
-  const uint8_t mac[6] = {0x24, 0x6F, 0x28, 0x22, 0x0A, 0xAC};
   TargetConfig in;
-  memcpy(in.station_mac, mac, 6);
   in.sound_id = 6;
   in.hit_time_ms = 12345;
   in.cooldown_ms = 2500;
@@ -99,7 +115,6 @@ void test_target_blob_roundtrip() {
   encodeTargetConfig(in, blob);
   TargetConfig out;
   decodeTargetConfig(blob, sizeof(blob), out);
-  TEST_ASSERT_EQUAL_UINT8_ARRAY(mac, out.station_mac, 6);
   TEST_ASSERT_EQUAL_UINT8(6, out.sound_id);
   TEST_ASSERT_EQUAL_UINT16(12345, out.hit_time_ms);
   TEST_ASSERT_EQUAL_UINT16(2500, out.cooldown_ms);
@@ -108,24 +123,23 @@ void test_target_blob_roundtrip() {
 }
 
 void test_target_blob_endianness() {
-  // hit_time_ms = 0x1234 must serialize little-endian at offsets 7..8
+  // hit_time_ms = 0x1234 must serialize little-endian at offsets 1..2
   TargetConfig in;
   in.hit_time_ms = 0x1234;
   uint8_t blob[TARGET_BLOB_SIZE];
   encodeTargetConfig(in, blob);
-  TEST_ASSERT_EQUAL_HEX8(0x34, blob[7]);
-  TEST_ASSERT_EQUAL_HEX8(0x12, blob[8]);
+  TEST_ASSERT_EQUAL_HEX8(0x34, blob[1]);
+  TEST_ASSERT_EQUAL_HEX8(0x12, blob[2]);
 }
 
 void test_hit_report_roundtrip() {
-  const uint8_t mac[6] = {0xA0, 0xB1, 0xC2, 0xD3, 0xE4, 0xF5};
   uint8_t payload[PAYLOAD_SIZE];
-  encodeHitReport(mac, 9, payload);
-  uint8_t outMac[6];
-  uint8_t sound = 0;
-  decodeHitReport(payload, outMac, sound);
-  TEST_ASSERT_EQUAL_UINT8_ARRAY(mac, outMac, 6);
+  encodeHitReport(7, 9, 3, payload);
+  uint8_t shooter = 0, sound = 0, damage = 0;
+  decodeHitReport(payload, shooter, sound, damage);
+  TEST_ASSERT_EQUAL_UINT8(7, shooter);
   TEST_ASSERT_EQUAL_UINT8(9, sound);
+  TEST_ASSERT_EQUAL_UINT8(3, damage);
 }
 
 void test_discover_reply_roundtrip() {
@@ -217,6 +231,132 @@ void test_blob_len_clamped() {
   TEST_ASSERT_EQUAL_UINT8(CONFIG_BLOB_MAX, payload[6]);
 }
 
+// --- IR telegram (IrTelegram.h, v0x03) ---------------------------------------
+
+void test_irt_crc4_detects_bit_flips() {
+  const uint16_t data12 = 0x175;  // arbitrary 12-bit value
+  const uint8_t crc = irtCrc4(data12);
+  TEST_ASSERT_TRUE(crc <= 0x0F);
+  for (int i = 0; i < 12; i++) {
+    TEST_ASSERT_NOT_EQUAL(crc, irtCrc4(data12 ^ (1 << i)));
+  }
+}
+
+void test_irt_encode_decode_roundtrip() {
+  for (uint8_t id = 0; id <= 15; id++) {
+    const uint16_t frame = irtEncode(id, 5);
+    uint8_t outId = 0xFF, outDmg = 0;
+    TEST_ASSERT_TRUE(irtDecodeFrame(frame, outId, outDmg));
+    TEST_ASSERT_EQUAL_UINT8(id, outId);
+    TEST_ASSERT_EQUAL_UINT8(5, outDmg);
+  }
+}
+
+void test_irt_encode_clamps_damage() {
+  // A shot always carries at least 1 damage.
+  uint8_t id = 0, dmg = 0;
+  TEST_ASSERT_TRUE(irtDecodeFrame(irtEncode(3, 0), id, dmg));
+  TEST_ASSERT_EQUAL_UINT8(1, dmg);
+}
+
+void test_irt_decode_rejects_bad_crc_and_version() {
+  const uint16_t frame = irtEncode(4, 2);
+  uint8_t id, dmg;
+  TEST_ASSERT_FALSE(irtDecodeFrame(frame ^ 0x0001, id, dmg));  // CRC flip
+  // version nibble changed, CRC recomputed to match -> version check hits
+  const uint16_t data12 = (uint16_t)((frame >> 4) & 0x0FF) | (0x2 << 8);
+  const uint16_t alien = (uint16_t)(data12 << 4) | irtCrc4(data12);
+  TEST_ASSERT_FALSE(irtDecodeFrame(alien, id, dmg));
+}
+
+// Feeds a sender timing table into the decoder, optionally distorting every
+// duration by `skewUs` (TSOP pulse stretching) – returns the decoded frame.
+static bool playTimings(const uint16_t *t, size_t n, int skewUs,
+                        uint16_t &frame) {
+  IrtDecoder dec;
+  bool got = false;
+  for (size_t i = 0; i < n; i++) {
+    const bool mark = (i % 2) == 0;
+    // marks stretch, the enclosed spaces shrink by the same amount
+    const int32_t us = (int32_t)t[i] + (mark ? skewUs : -skewUs);
+    if (dec.feed(mark, (uint32_t)us)) got = true;
+  }
+  return got && dec.take(frame);
+}
+
+void test_irt_decoder_roundtrip_over_the_air() {
+  const uint16_t sent = irtEncode(11, 3);
+  uint16_t t[IRT_PULSE_COUNT];
+  const size_t n = irtTimings(sent, t, IRT_PULSE_COUNT);
+  TEST_ASSERT_EQUAL_size_t(IRT_PULSE_COUNT, n);
+
+  uint16_t rx = 0;
+  TEST_ASSERT_TRUE(playTimings(t, n, 0, rx));
+  TEST_ASSERT_EQUAL_HEX16(sent, rx);
+}
+
+void test_irt_decoder_tolerates_tsop_skew() {
+  // TSOP4138 stretches marks / shrinks spaces by up to a few 100 µs.
+  const uint16_t sent = irtEncode(2, 15);
+  uint16_t t[IRT_PULSE_COUNT];
+  const size_t n = irtTimings(sent, t, IRT_PULSE_COUNT);
+  for (int skew = -200; skew <= 200; skew += 100) {
+    uint16_t rx = 0;
+    TEST_ASSERT_TRUE(playTimings(t, n, skew, rx));
+    TEST_ASSERT_EQUAL_HEX16(sent, rx);
+  }
+}
+
+void test_irt_decoder_rejects_corrupted_frame() {
+  // A flipped bit-space changes the payload -> CRC must kill the frame.
+  const uint16_t sent = irtEncode(9, 1);
+  uint16_t t[IRT_PULSE_COUNT];
+  const size_t n = irtTimings(sent, t, IRT_PULSE_COUNT);
+  uint16_t mutated[IRT_PULSE_COUNT];
+  memcpy(mutated, t, sizeof(t));
+  mutated[3] = (t[3] == IRT_SPACE0_US) ? IRT_SPACE1_US : IRT_SPACE0_US;
+  uint16_t rx = 0;
+  TEST_ASSERT_FALSE(playTimings(mutated, n, 0, rx));
+}
+
+void test_irt_decoder_ignores_remote_controls() {
+  // NEC remote: 9 ms header (out of range) + short ~560 µs pulses – the
+  // decoder must never report a frame, and the old plain 5-ms burst of the
+  // v0x02 station must be ignored too.
+  IrtDecoder dec;
+  TEST_ASSERT_FALSE(dec.feed(true, 9000));  // NEC header mark
+  TEST_ASSERT_FALSE(dec.feed(false, 4500));
+  for (int i = 0; i < 32; i++) {
+    TEST_ASSERT_FALSE(dec.feed(true, 560));
+    TEST_ASSERT_FALSE(dec.feed(false, i % 2 ? 560 : 1690));
+  }
+  uint16_t rx;
+  TEST_ASSERT_FALSE(dec.take(rx));
+  TEST_ASSERT_FALSE(dec.feed(true, 5000));  // legacy v0x02 burst
+  TEST_ASSERT_FALSE(dec.feed(false, 100000));
+  TEST_ASSERT_FALSE(dec.take(rx));
+}
+
+void test_irt_decoder_resyncs_after_garbage() {
+  // Noise first, then a clean frame – the header must resync the decoder.
+  const uint16_t sent = irtEncode(1, 1);
+  uint16_t t[IRT_PULSE_COUNT];
+  const size_t n = irtTimings(sent, t, IRT_PULSE_COUNT);
+
+  IrtDecoder dec;
+  dec.feed(true, 400);
+  dec.feed(false, 700);
+  dec.feed(true, 2500);   // looks like a header mark...
+  dec.feed(false, 5000);  // ...but the gap kills it
+  bool got = false;
+  for (size_t i = 0; i < n; i++) {
+    if (dec.feed((i % 2) == 0, t[i])) got = true;
+  }
+  uint16_t rx = 0;
+  TEST_ASSERT_TRUE(got && dec.take(rx));
+  TEST_ASSERT_EQUAL_HEX16(sent, rx);
+}
+
 int main() {
   UNITY_BEGIN();
   RUN_TEST(test_packet_size);
@@ -225,6 +365,7 @@ int main() {
   RUN_TEST(test_validate_rejects_corruption);
   RUN_TEST(test_validate_rejects_wrong_version);
   RUN_TEST(test_station_blob_roundtrip);
+  RUN_TEST(test_station_blob_ir_id_zero_is_valid);
   RUN_TEST(test_station_blob_laser_defaults);
   RUN_TEST(test_station_blob_zero_led_falls_back);
   RUN_TEST(test_target_blob_roundtrip);
@@ -236,5 +377,14 @@ int main() {
   RUN_TEST(test_push_begin_roundtrip);
   RUN_TEST(test_push_ack_roundtrip);
   RUN_TEST(test_blob_len_clamped);
+  RUN_TEST(test_irt_crc4_detects_bit_flips);
+  RUN_TEST(test_irt_encode_decode_roundtrip);
+  RUN_TEST(test_irt_encode_clamps_damage);
+  RUN_TEST(test_irt_decode_rejects_bad_crc_and_version);
+  RUN_TEST(test_irt_decoder_roundtrip_over_the_air);
+  RUN_TEST(test_irt_decoder_tolerates_tsop_skew);
+  RUN_TEST(test_irt_decoder_rejects_corrupted_frame);
+  RUN_TEST(test_irt_decoder_ignores_remote_controls);
+  RUN_TEST(test_irt_decoder_resyncs_after_garbage);
   return UNITY_END();
 }

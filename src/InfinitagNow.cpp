@@ -41,7 +41,7 @@ static uint16_t getU16(const uint8_t *src) {
   return static_cast<uint16_t>(src[0]) | (static_cast<uint16_t>(src[1]) << 8);
 }
 
-// --- station blob (PROTOCOL.md, v0x02 layout) --------------------------------
+// --- station blob (PROTOCOL.md, v0x03 layout) --------------------------------
 void encodeStationConfig(const StationConfig &c, uint8_t *blob) {
   memset(blob, 0, STATION_BLOB_SIZE);
   blob[0] = c.volume_pct;
@@ -49,6 +49,7 @@ void encodeStationConfig(const StationConfig &c, uint8_t *blob) {
   blob[2] = c.led_busy;
   blob[3] = c.laser_mode;
   blob[4] = c.laser_glow;
+  blob[5] = c.ir_id;
 }
 
 void decodeStationConfig(const uint8_t *blob, size_t len, StationConfig &c) {
@@ -59,27 +60,27 @@ void decodeStationConfig(const uint8_t *blob, size_t len, StationConfig &c) {
   if (len >= 3 && blob[2] != 0) c.led_busy = blob[2];
   if (len >= 4 && blob[3] != 0) c.laser_mode = blob[3];
   if (len >= 5 && blob[4] != 0) c.laser_glow = blob[4];
+  // ir_id 0 is a valid value (factory group), no unset semantics here
+  if (len >= 6) c.ir_id = blob[5] & 0x0F;
 }
 
-// --- target blob (PROTOCOL.md, v0x02 layout) ----------------------------------
+// --- target blob (PROTOCOL.md, v0x03 layout) ----------------------------------
 void encodeTargetConfig(const TargetConfig &c, uint8_t *blob) {
   memset(blob, 0, TARGET_BLOB_SIZE);
-  memcpy(blob, c.station_mac, 6);
-  blob[6] = c.sound_id;
-  putU16(blob + 7, c.hit_time_ms);
-  putU16(blob + 9, c.cooldown_ms);
-  blob[11] = c.sw_animation;
-  blob[12] = c.sw_channels;
+  blob[0] = c.sound_id;
+  putU16(blob + 1, c.hit_time_ms);
+  putU16(blob + 3, c.cooldown_ms);
+  blob[5] = c.sw_animation;
+  blob[6] = c.sw_channels;
 }
 
 void decodeTargetConfig(const uint8_t *blob, size_t len, TargetConfig &c) {
   c = TargetConfig{};
-  if (len >= 6) memcpy(c.station_mac, blob, 6);
-  if (len >= 7) c.sound_id = blob[6];
-  if (len >= 9) c.hit_time_ms = getU16(blob + 7);
-  if (len >= 11) c.cooldown_ms = getU16(blob + 9);
-  if (len >= 12) c.sw_animation = blob[11];
-  if (len >= 13) c.sw_channels = blob[12];
+  if (len >= 1) c.sound_id = blob[0];
+  if (len >= 3) c.hit_time_ms = getU16(blob + 1);
+  if (len >= 5) c.cooldown_ms = getU16(blob + 3);
+  if (len >= 6) c.sw_animation = blob[5];
+  if (len >= 7) c.sw_channels = blob[6];
 }
 
 // --- CRC-32 (IEEE, reflected, bitwise – speed is irrelevant here) -------------
@@ -141,17 +142,19 @@ void decodePushAck(const uint8_t *payload, PushAck &a) {
 }
 
 // --- HIT_REPORT payload -------------------------------------------------------
-void encodeHitReport(const uint8_t stationMac[6], uint8_t soundId,
+void encodeHitReport(uint8_t shooterId, uint8_t soundId, uint8_t damage,
                      uint8_t *payload) {
   memset(payload, 0, PAYLOAD_SIZE);
-  memcpy(payload, stationMac, 6);
-  payload[6] = soundId;
+  payload[0] = shooterId;
+  payload[1] = soundId;
+  payload[2] = damage;
 }
 
-void decodeHitReport(const uint8_t *payload, uint8_t stationMac[6],
-                     uint8_t &soundId) {
-  memcpy(stationMac, payload, 6);
-  soundId = payload[6];
+void decodeHitReport(const uint8_t *payload, uint8_t &shooterId,
+                     uint8_t &soundId, uint8_t &damage) {
+  shooterId = payload[0];
+  soundId = payload[1];
+  damage = payload[2];
 }
 
 // --- DISCOVER_REPLY payload (Doc 12 §3.6.1) ----------------------------------
