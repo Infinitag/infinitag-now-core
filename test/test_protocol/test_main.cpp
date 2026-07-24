@@ -102,6 +102,7 @@ void test_station_blob_roundtrip() {
   in.laser_mode = LASER_MODE_ON;
   in.laser_glow = 4;              // 2 s
   in.ir_id = 7;
+  in.led_bright_pct = 40;
   uint8_t blob[STATION_BLOB_SIZE];
   encodeStationConfig(in, blob);
   StationConfig out;
@@ -112,6 +113,20 @@ void test_station_blob_roundtrip() {
   TEST_ASSERT_EQUAL_UINT8(LASER_MODE_ON, out.laser_mode);
   TEST_ASSERT_EQUAL_UINT8(4, out.laser_glow);
   TEST_ASSERT_EQUAL_UINT8(7, out.ir_id);
+  TEST_ASSERT_EQUAL_UINT8(40, out.led_bright_pct);
+}
+
+void test_led_bright_zero_falls_back_to_default() {
+  // 0 = field not set (old sender) -> receivers keep 100 %.
+  uint8_t blob[STATION_BLOB_SIZE] = {0};
+  StationConfig sOut;
+  decodeStationConfig(blob, sizeof(blob), sOut);
+  TEST_ASSERT_EQUAL_UINT8(100, sOut.led_bright_pct);
+
+  uint8_t tblob[TARGET_BLOB_SIZE] = {0};
+  TargetConfig tOut;
+  decodeTargetConfig(tblob, sizeof(tblob), tOut);
+  TEST_ASSERT_EQUAL_UINT8(100, tOut.led_bright_pct);
 }
 
 void test_station_blob_ir_id_zero_is_valid() {
@@ -155,6 +170,7 @@ void test_target_blob_roundtrip() {
   in.cooldown_ms = 2500;
   in.sw_animation = 1;
   in.sw_channels = 0b101;
+  in.led_bright_pct = 65;
   uint8_t blob[TARGET_BLOB_SIZE];
   encodeTargetConfig(in, blob);
   TargetConfig out;
@@ -164,6 +180,7 @@ void test_target_blob_roundtrip() {
   TEST_ASSERT_EQUAL_UINT16(2500, out.cooldown_ms);
   TEST_ASSERT_EQUAL_UINT8(1, out.sw_animation);
   TEST_ASSERT_EQUAL_UINT8(0b101, out.sw_channels);
+  TEST_ASSERT_EQUAL_UINT8(65, out.led_bright_pct);
 }
 
 void test_target_blob_endianness() {
@@ -413,6 +430,7 @@ int main() {
   RUN_TEST(test_non_rescue_messages_stay_version_locked);
   RUN_TEST(test_station_blob_roundtrip);
   RUN_TEST(test_station_blob_ir_id_zero_is_valid);
+  RUN_TEST(test_led_bright_zero_falls_back_to_default);
   RUN_TEST(test_station_blob_laser_defaults);
   RUN_TEST(test_station_blob_zero_led_falls_back);
   RUN_TEST(test_target_blob_roundtrip);
