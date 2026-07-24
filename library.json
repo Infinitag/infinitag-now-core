@@ -1,6 +1,6 @@
 {
   "name": "InfinitagNow",
-  "version": "3.0.0",
+  "version": "3.1.0",
   "description": "Shared ESP-NOW protocol library for the Infinitag Now system (packet format v0x03, CRC16, config blobs) + shared ESP-NOW device service + SoftAP web updater + IR shot telegram codec",
   "keywords": [
     "esp-now",

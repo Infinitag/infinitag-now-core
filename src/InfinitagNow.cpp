@@ -24,9 +24,14 @@ void seal(Packet &p) {
   p.crc16 = crc16(reinterpret_cast<const uint8_t *>(&p), PACKET_SIZE - 2);
 }
 
+bool isRescueMsg(uint8_t msgType) {
+  return msgType == MSG_DISCOVER_REQ || msgType == MSG_DISCOVER_REPLY ||
+         msgType == MSG_UPDATE_BEGIN || msgType == MSG_UPDATE_ACK;
+}
+
 bool validate(const uint8_t *data, size_t len) {
   if (len != PACKET_SIZE || data == nullptr) return false;
-  if (data[0] != PROTOCOL_VERSION) return false;
+  if (data[0] != PROTOCOL_VERSION && !isRescueMsg(data[1])) return false;
   uint16_t rx;
   memcpy(&rx, data + PACKET_SIZE - 2, 2);  // little-endian on ESP32 & test hosts
   return rx == crc16(data, PACKET_SIZE - 2);
