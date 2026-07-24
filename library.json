@@ -1,16 +1,24 @@
 {
   "name": "InfinitagNow",
-  "version": "2.0.0",
-  "description": "Shared ESP-NOW protocol library for the Infinitag Now system (packet format v0x02, CRC16, config blobs) + shared ESP-NOW device service + SoftAP web updater",
-  "keywords": ["esp-now", "esp32", "lasertag", "infinitag"],
+  "version": "3.0.0",
+  "description": "Shared ESP-NOW protocol library for the Infinitag Now system (packet format v0x03, CRC16, config blobs) + shared ESP-NOW device service + SoftAP web updater + IR shot telegram codec",
+  "keywords": [
+    "esp-now",
+    "esp32",
+    "lasertag",
+    "infinitag"
+  ],
   "repository": {
     "type": "git",
     "url": "https://github.com/Infinitag/infinitag-now-core.git"
   },
-  "license": "CC-BY-NC-SA-4.0",
+  "license": "PolyForm-Noncommercial-1.0.0",
   "frameworks": "*",
   "platforms": "*",
   "export": {
-    "exclude": ["test", ".github"]
+    "exclude": [
+      "test",
+      ".github"
+    ]
   }
 }
