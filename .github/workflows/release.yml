@@ -1,0 +1,44 @@
+# Release-Automatisierung: Ein Tag-Push (vX.Y.Z) laesst erst die nativen
+# Protokoll-Tests laufen und erstellt dann das GitHub-Release mit
+# generierten Notes. Der Core hat kein Binary-Asset (reine Bibliothek);
+# die Geraete-Repos pinnen ihre CI-Builds auf diese Tags.
+name: Release
+
+on:
+  push:
+    tags: ['v*.*.*']
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Tag gegen library.json pruefen
+        run: |
+          VER="v$(python3 -c "import json;print(json.load(open('library.json'))['version'])")"
+          if [ "$VER" != "$GITHUB_REF_NAME" ]; then
+            echo "::error::Tag $GITHUB_REF_NAME passt nicht zur library.json-Version $VER"
+            exit 1
+          fi
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: PlatformIO installieren
+        run: pip install platformio
+
+      - name: Native Protokoll-Tests
+        run: pio test -e native
+
+      - name: GitHub-Release erstellen
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" \
+            --title "Core $GITHUB_REF_NAME" \
+            --generate-notes
