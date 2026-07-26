@@ -18,6 +18,7 @@ für Funk und Firmware-Updates. Die verbindliche Spezifikation steht in
 | Protokoll | `src/InfinitagNow.*` | Paketformat, CRC-16, Config-Blobs, Encode/Decode – **reines C++ ohne Arduino-Abhängigkeit**, nativ testbar |
 | IR-Telegramm | `src/IrTelegram.*` | Codec des IR-Schusses (Schützen-ID + Schaden + CRC-4): Sende-Timing-Tabelle + Empfangs-Decoder – **reines C++, nativ testbar** |
 | Funk-Service | `src/EspNowService.*` | ESP-NOW-Init, Peer-LRU, RX-Ringpuffer, CRC-Validierung (Arduino-only, `#ifdef`-gekapselt) |
+| Funk-Push | `src/EspNowPush.h` | ESP-NOW-Firmware-Push: Sender (Config-Box) + Empfänger (Station/Target), rohe 250-Byte-Frames mit Fenster-ACKs |
 | Update-Service | `src/WebUpdateService.*` | SoftAP + Browser-Upload-Seite + OTA-Flash für alle Gerätetypen, inkl. Geräte-Label und Dateinamen-Check |
 | Spezifikation | [`PROTOCOL.md`](PROTOCOL.md) | Nachrichten, Blobs, Flows – die einzige verbindliche Quelle |
 | Tests | `test/test_protocol/` | Unit-Tests des Protokolls, laufen nativ auf dem PC |
@@ -33,11 +34,8 @@ lib_deps =
     ; lokale Arbeitskopie (immer aktueller Stand, kein Cache-Drift):
     symlink:///Volumes/Basteln/Infinitag/repos/infinitag-now-core
     ; alternativ auf einen Versions-Tag pinnen:
-    ; https://github.com/Infinitag/infinitag-now-core.git#v3.0.0
+    ; https://github.com/Infinitag/infinitag-now-core.git#v3.3.0
 ```
-
-Solange das Repo privat ist, braucht die Git-Variante Org-Zugriff
-(SSH-Key oder Credential Helper).
 
 ## Tests
 
@@ -53,7 +51,10 @@ Protokolländerung kommt mit angepassten Tests im selben Commit.
 Das `version`-Byte im Paket-Header und die Tags dieses Repos bewegen
 sich zusammen: aktuell **0x03 ↔ `v3.x`**. Ein Protokollbruch erhöht
 beides (neues Major-Tag), die Geräte-Repos ziehen bewusst nach.
-Empfänger verwerfen Pakete fremder Versionen am ersten Byte.
+Empfänger verwerfen Pakete fremder Versionen am ersten Byte – mit
+einer Ausnahme: Der **Rettungsanker** (Discovery + Update-Trigger) ist
+versionstolerant, damit eine neuere Config-Box ältere Geräte immer noch
+finden und in den Update-Modus schicken kann (Details in `PROTOCOL.md`).
 
 ## Entwicklung
 
