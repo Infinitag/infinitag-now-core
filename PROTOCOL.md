@@ -150,6 +150,14 @@ gibt es keinen Treffer.
 
 Unbekannte Test-Nummern beantwortet das Gerät mit UNSUPPORTED.
 
+### Selbsttest-Katalog (`DEBUG_CMD`, Target)
+
+| Test-Nr. | Test | Parameter `[1]` | Ergebnis |
+|---|---|---|---|
+| 2 | LED-Ring-Testmuster | – | OK (Sichtprüfung R/G/B/W) |
+| 5 | IR-Empfangs-Test | Timeout in Sekunden (0 = 10) | OK beim nächsten gültigen Telegramm (grüner Blitz, keine Hit-Aktion – zum Einschießen), sonst TIMEOUT |
+| 7 | Treffer-Simulation | – | OK = angenommen; das Target fährt die komplette Treffer-Sequenz (Grün-Blitz, rote Welle, Prop-Muster, Cooldown) und broadcastet einen `HIT_REPORT` mit `shooter_id` 0 – zum Einstellen von Hit-Zeit/Cooldown ohne Station |
+
 **Kalibriermodus (Test 6):** Laser und IR-LED-Treiber leuchten dauerhaft
 (kein 38-kHz-Burst-Muster) – zum optischen Ausrichten wird die IR-LED
 vorübergehend gegen eine weiße LED getauscht, Optik zentriert, danach

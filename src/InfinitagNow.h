@@ -89,6 +89,9 @@ enum DebugTest : uint8_t {
   DBG_TRIGGER = 5,  // param = timeout s; result when trigger pressed / timeout
   DBG_CALIBRATE = 6,  // param = minutes on (0 = off, clamp 60): laser + IR
                       // LED continuously on for optics alignment
+  DBG_HIT     = 7,  // target only: simulate a full hit (green flash, red
+                    // wave, prop pattern, cooldown) - tune hit_time/
+                    // cooldown without a station; OK = accepted
 };
 
 enum DebugResult : uint8_t {
