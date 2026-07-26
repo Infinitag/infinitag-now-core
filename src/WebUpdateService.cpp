@@ -27,9 +27,27 @@ bool WebUpdateService::begin(const char *apName, const char *fwVersion,
         "/store", HTTP_POST, [this]() { handleStoreDone(); },
         [this]() { handleStoreData(); });
   }
+  // Reboot button of the update pages: leave the update mode at any
+  // time without waiting for the timeout (all device types).
+  _server.on("/reboot", [this]() { handleReboot(); });
   _server.onNotFound([this]() { handleRoot(); });
   _server.begin();
   return true;
+}
+
+void WebUpdateService::handleReboot() {
+  if (_uploading) {
+    _server.send(409, "text/plain", "Upload laeuft - bitte warten.");
+    return;
+  }
+  _server.send(200, "text/html",
+               resultPage("Neustart",
+                          "Das Ger&auml;t startet neu und ist gleich wieder "
+                          "im normalen Betrieb. Dieses WLAN verschwindet.",
+                          false));
+  _server.client().stop();  // flush the response before the restart
+  delay(600);
+  ESP.restart();
 }
 
 void WebUpdateService::loop() { _server.handleClient(); }
@@ -72,6 +90,9 @@ void WebUpdateService::handleRoot() {
   html +=
       " – Update</title></head>"
       "<body style='font-family:sans-serif;max-width:26em;margin:2em auto'>"
+      "<a href='/reboot' style='float:right;font-size:12px' "
+      "onclick=\"return confirm('Update-Modus beenden und neu starten?')\">"
+      "&#8635; Neustart</a>"
       "<h2>";
   html += _label;
   html +=

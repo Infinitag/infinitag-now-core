@@ -77,6 +77,7 @@ class WebUpdateService {
 
  private:
   void handleRoot();
+  void handleReboot();
   void handleUploadData();
   void handleUploadDone();
   void handleStoreData();
