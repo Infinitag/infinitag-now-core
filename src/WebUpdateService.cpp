@@ -2,6 +2,8 @@
 #ifdef ARDUINO
 #include "WebUpdateService.h"
 
+#include "CaptivePortal.h"
+
 #include <WiFi.h>
 #include <Update.h>
 #include <esp_now.h>
@@ -18,6 +20,11 @@ bool WebUpdateService::begin(const char *apName, const char *fwVersion,
   WiFi.mode(WIFI_AP);
   if (!WiFi.softAP(apName)) return false;  // open AP, default 192.168.4.1
 
+  // Captive portal: every DNS name resolves to us, so the OS probe hits
+  // the web server and gets redirected (captiveRedirect).
+  _dns.setErrorReplyCode(DNSReplyCode::NoError);
+  _dns.start(53, "*", WiFi.softAPIP());
+
   _server.on("/", HTTP_GET, [this]() { handleRoot(); });
   _server.on(
       "/update", HTTP_POST, [this]() { handleUploadDone(); },
@@ -30,7 +37,9 @@ bool WebUpdateService::begin(const char *apName, const char *fwVersion,
   // Reboot button of the update pages: leave the update mode at any
   // time without waiting for the timeout (all device types).
   _server.on("/reboot", [this]() { handleReboot(); });
-  _server.onNotFound([this]() { handleRoot(); });
+  _server.onNotFound([this]() {
+    if (!captiveRedirect()) handleRoot();
+  });
   _server.begin();
   return true;
 }
@@ -50,7 +59,22 @@ void WebUpdateService::handleReboot() {
   ESP.restart();
 }
 
-void WebUpdateService::loop() { _server.handleClient(); }
+void WebUpdateService::loop() {
+  _dns.processNextRequest();
+  _server.handleClient();
+}
+
+bool WebUpdateService::captiveRedirect() {
+  const String host = _server.hostHeader();
+  if (!inow::captiveNeedsRedirect(host.c_str(), apIp())) return false;
+  String loc = "http://";
+  loc += apIp();
+  loc += "/";
+  _server.sendHeader("Location", loc, true);
+  _server.send(302, "text/plain", "");
+  _server.client().stop();
+  return true;
+}
 
 int WebUpdateService::clientCount() const { return WiFi.softAPgetStationNum(); }
 
@@ -78,6 +102,8 @@ String WebUpdateService::resultPage(const char *title, const String &body,
 }
 
 void WebUpdateService::handleRoot() {
+  // a phone opening http://somehost/ hits the '/' route, not onNotFound
+  if (captiveRedirect()) return;
   if (_customPage) {
     _server.send(200, "text/html", _customPage);
     return;
