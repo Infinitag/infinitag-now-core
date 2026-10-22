@@ -1,7 +1,12 @@
 // SoftAP firmware updater, shared by all Infinitag-Now devices.
 //
 // begin() tears down ESP-NOW, opens an open SoftAP and serves a minimal
-// upload page on http://192.168.4.1/ . A posted firmware.bin is written to
+// upload page on http://192.168.4.1/ . A DNS catch-all plus a 302 for
+// foreign Host headers turn it into a captive portal: the phone's
+// connectivity probe lands here and the OS offers/opens the page itself
+// (see CaptivePortal.h). Note: captive-portal browsers are restricted -
+// the WLAN form works there, a firmware upload may need a real browser
+// at http://192.168.4.1/ . A posted firmware.bin is written to
 // the inactive OTA slot via Update.h; the boot partition only switches after
 // a complete, checksum-valid transfer, so an aborted upload always boots the
 // old firmware. The caller owns the surrounding UI (OLED text, LED pattern,
@@ -12,6 +17,7 @@
 // Arduino/ESP32 only – excluded from native test builds.
 #ifdef ARDUINO
 #include <Arduino.h>
+#include <DNSServer.h>
 #include <WebServer.h>
 
 // Optional second upload target (config box only): store a DEVICE
@@ -76,6 +82,9 @@ class WebUpdateService {
   const char *apIp() const { return "192.168.4.1"; }
 
  private:
+  // 302 to http://<apIp>/ when the request is addressed to a foreign
+  // host (captive-portal probe); true = response sent, stop handling.
+  bool captiveRedirect();
   void handleRoot();
   void handleReboot();
   void handleUploadData();
@@ -84,6 +93,7 @@ class WebUpdateService {
   void handleStoreDone();
 
   WebServer _server{80};
+  DNSServer _dns;  // answers every name with the AP IP (captive portal)
   char _version[16] = "?";
   char _label[32] = "?";
   char _prefix[32] = "";
