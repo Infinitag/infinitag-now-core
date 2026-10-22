@@ -12,7 +12,7 @@ statt eines rohen Bursts – Treffer werden **dynamisch** zur schießenden
 Station geroutet (jeder Zauberstab schießt auf jedes Target); die statische
 Target→Station-Zuordnung (`station_mac` im Target-Blob) ist entfallen.
 Spezifikation des IR-Telegramms: siehe unten. **Seit 2026-10-22** (Core
-v3.4, weiterhin `version` 0x03): Stationen handeln ihre `ir_id` **selbst
+v3.5, weiterhin `version` 0x03): Stationen handeln ihre `ir_id` **selbst
 aus** (`IRID_PROBE`/`IRID_BEACON`) – niemand vergibt mehr IDs, auch die
 Config-Box nicht.
 
@@ -345,7 +345,7 @@ aus dem IR-Telegramm.
 Inkompatible Änderung ⇒ `version`-Byte erhöhen + Major-Tag.
 Geräte-Repos pinnen `lib_deps` auf den Tag. **Kompatible Erweiterungen**
 (neue Nachrichtentypen, die Altgeräte ignorieren – z. B. die
-IR-ID-Aushandlung in v3.4) erhöhen nur den Minor-Tag.
+IR-ID-Aushandlung in v3.5) erhöhen nur den Minor-Tag.
 
 **Migration v0x02 → v0x03 (Flag-Day):** Empfänger verwerfen fremde
 Versionen am ersten Byte, und der v0x02-Burst triggert den
