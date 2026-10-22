@@ -34,7 +34,7 @@ lib_deps =
     ; lokale Arbeitskopie (immer aktueller Stand, kein Cache-Drift):
     symlink:///Volumes/Basteln/Infinitag/repos/infinitag-now-core
     ; alternativ auf einen Versions-Tag pinnen:
-    ; https://github.com/Infinitag/infinitag-now-core.git#v3.3.0
+    ; https://github.com/Infinitag/infinitag-now-core.git#v3.4.0
 ```
 
 ## Tests
