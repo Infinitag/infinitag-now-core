@@ -83,7 +83,8 @@ void test_rescue_still_requires_crc() {
 
 void test_non_rescue_messages_stay_version_locked() {
   const uint8_t msgs[] = {MSG_HIT_REPORT, MSG_CFG_WRITE, MSG_CFG_ACK,
-                          MSG_DEBUG_CMD, MSG_PUSH_BEGIN};
+                          MSG_DEBUG_CMD, MSG_PUSH_BEGIN, MSG_IRID_PROBE,
+                          MSG_IRID_BEACON};
   for (uint8_t m : msgs) {
     TEST_ASSERT_FALSE(isRescueMsg(m));
     Packet p;

@@ -17,6 +17,7 @@ für Funk und Firmware-Updates. Die verbindliche Spezifikation steht in
 |---|---|---|
 | Protokoll | `src/InfinitagNow.*` | Paketformat, CRC-16, Config-Blobs, Encode/Decode – **reines C++ ohne Arduino-Abhängigkeit**, nativ testbar |
 | IR-Telegramm | `src/IrTelegram.*` | Codec des IR-Schusses (Schützen-ID + Schaden + CRC-4): Sende-Timing-Tabelle + Empfangs-Decoder – **reines C++, nativ testbar** |
+| IR-ID-Aushandlung | `src/IrIdNegotiator.*` | Zero-Config-Vergabe der Schützen-ID (1–15) zwischen Stationen: Mithören → Probe → Beacon, Tie-Break kleinere MAC – **reines C++, nativ testbar** (inkl. Bus-Simulation mit Paketverlust) |
 | Funk-Service | `src/EspNowService.*` | ESP-NOW-Init, Peer-LRU, RX-Ringpuffer, CRC-Validierung (Arduino-only, `#ifdef`-gekapselt) |
 | Funk-Push | `src/EspNowPush.h` | ESP-NOW-Firmware-Push: Sender (Config-Box) + Empfänger (Station/Target), rohe 250-Byte-Frames mit Fenster-ACKs |
 | Update-Service | `src/WebUpdateService.*` | SoftAP + Browser-Upload-Seite + OTA-Flash für alle Gerätetypen, inkl. Geräte-Label und Dateinamen-Check. Captive Portal: DNS-Catch-all + 302 für fremde Hosts (`CaptivePortal.h`, nativ getestet) – das Handy bietet die Seite nach dem Verbinden selbst an |
