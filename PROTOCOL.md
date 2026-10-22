@@ -11,13 +11,17 @@ neu waren `UPDATE_BEGIN`/`UPDATE_ACK` (SoftAP-Update) und `PUSH_*`
 statt eines rohen Bursts – Treffer werden **dynamisch** zur schießenden
 Station geroutet (jeder Zauberstab schießt auf jedes Target); die statische
 Target→Station-Zuordnung (`station_mac` im Target-Blob) ist entfallen.
-Spezifikation des IR-Telegramms: siehe unten.
+Spezifikation des IR-Telegramms: siehe unten. **Seit 2026-10-22** (Core
+v3.4, weiterhin `version` 0x03): Stationen handeln ihre `ir_id` **selbst
+aus** (`IRID_PROBE`/`IRID_BEACON`) – niemand vergibt mehr IDs, auch die
+Config-Box nicht.
 
 ## Grundlagen
 
 - Alle Geräte laufen als `WIFI_STA` (kein Connect) fest auf **Kanal 1**.
 - `WiFi.disconnect()` nach `WiFi.mode()`, `WiFi.setSleep(WIFI_PS_NONE)`.
-- **Broadcast** (FF:FF:FF:FF:FF:FF): `DISCOVER_REQ`, `HIT_REPORT`.
+- **Broadcast** (FF:FF:FF:FF:FF:FF): `DISCOVER_REQ`, `HIT_REPORT`,
+  `IRID_PROBE`, `IRID_BEACON`.
 - **Unicast**: alles andere. Peers per LRU-Cache (max. ~18 dynamisch).
 - **Identität = 48-Bit-MAC (eFuse).** Es gibt keine anwender-vergebenen
   IDs mehr; Menschen unterscheiden Geräte über das MAC-Suffix (letzte
@@ -48,6 +52,8 @@ wird dem `recv_cb` mitgegeben – sie fährt nicht im Payload mit.
 | 0x02 | `DISCOVER_REPLY` | Gerät → Config-Box | Unicast | siehe unten |
 | 0x03 | `IDENTIFY` | Config-Box → Gerät | Unicast | `[0]` = Dauer in 100 ms (Default 7) |
 | 0x10 | `HIT_REPORT` | Target → alle | Broadcast | `[0]` = shooter_id (`ir_id` aus dem IR-Telegramm), `[1]` = sound_id des Targets, `[2]` = damage |
+| 0x11 | `IRID_PROBE` | Station → alle | Broadcast | `[0]` = gewünschte `ir_id` (1–15). „Hat die jemand?" – Inhaber antwortet mit `IRID_BEACON`. Neu 2026-10-22 |
+| 0x12 | `IRID_BEACON` | Station → alle | Broadcast (Antwort auf `IRID_PROBE` auch Unicast) | `[0]` = gehaltene `ir_id` (1–15). Periodisch alle 2 s und sofort nach Erwerb. Neu 2026-10-22 |
 | 0x30 | `CFG_WRITE` | Config-Box → Gerät | Unicast | Config-Blob (siehe unten) |
 | 0x31 | `CFG_ACK` | Gerät → Config-Box | Unicast | `[0]`: 0 = OK, 1 = NACK Persist., 2 = NACK Valid. |
 | 0x32 | `CFG_TEST_SOUND` | Config-Box → Station | Unicast | `[0]` = sound_id, nur abspielen, nicht persistieren |
@@ -104,10 +110,72 @@ Target→Station-Zuordnung mehr; ein Target braucht ab Werk keinerlei
 Funk-Konfiguration. Broadcast statt Unicast ist Absicht: so sieht der
 **Live-Monitor der Config-Box** alle Treffer mit.
 
-`ir_id` 0 ist ein **gültiger Wert** („Werksgruppe"): Ab Werk haben alle
-Stationen `ir_id` 0 und spielen gegenseitig ihre Treffer – ein
-Einzelplatz-Aufbau funktioniert ohne Konfiguration. Bei mehreren
-Stationen vergibt die Config-Box eindeutige IDs (1–15).
+`ir_id` 0 ist ein **gültiger Wert** („noch nicht ausgehandelt"): Eine
+Station schießt mit `shooter_id` 0 und spielt alle Treffer mit
+`shooter_id` 0, solange sie keine eigene ID hält (Boot-Phase, alle 15 IDs
+belegt). So verliert ein Spieler auch in der Übergangsphase nie seinen
+Treffer-Sound. Die IDs 1–15 werden **nicht vergeben, sondern
+ausgehandelt** – siehe nächster Abschnitt. Niemand muss eine `ir_id`
+kennen oder einstellen.
+
+### IR-ID-Aushandlung (`IRID_PROBE`/`IRID_BEACON`, seit 2026-10-22)
+
+**Ziel:** Mehrere Stationen im Funkbereich halten paarweise verschiedene
+`ir_id`s (1–15), ohne Config-Box und ohne Einstellung – auch wenn
+Stationen mitten im Spiel dazukommen, ausfallen oder gleichzeitig
+booten. Muster: Adresskonflikt-Erkennung wie bei Zeroconf/IPv4LL
+(mithören → anfragen → verkünden), nur über ESP-NOW-Broadcast.
+
+**Belegungstabelle:** Jede Station führt pro `ir_id` 1–15 den Zeitpunkt
+der letzten Evidenz, dass die ID von einer **anderen** MAC gehalten wird.
+Evidenz sind `IRID_BEACON`, `IRID_PROBE` **und `HIT_REPORT`** (dessen
+`shooter_id` ≠ 0 – ein Treffer beweist einen aktiven Schützen, das
+kostet nichts extra). Ein Eintrag verfällt nach `T_EXPIRE` ohne neue
+Evidenz. Die eigene ID steht nicht in der Tabelle.
+
+**Zustände der Station:**
+
+| Zustand | `ir_id` | Verhalten |
+|---|---|---|
+| `LISTEN` | 0 | Nach Boot (bzw. nach verlorenem Konflikt) `T_LISTEN` lang nur mithören und die Belegungstabelle füllen. |
+| `PROBE` | 0 | Kandidat wählen (Regel unten), `N_PROBE`-mal `IRID_PROBE` im Abstand `T_PROBE` broadcasten. Kommt währenddessen ein `IRID_BEACON` mit dem Kandidaten von fremder MAC → belegt, nächsten Kandidaten wählen (zurück an den Anfang von `PROBE`). Kommt ein `IRID_PROBE` mit dem Kandidaten von fremder MAC (gleichzeitiger Boot) → Tie-Break: die **numerisch kleinere MAC** (memcmp über 6 Byte) fährt fort, die größere wählt den nächsten Kandidaten. |
+| `HELD` | 1–15 | ID übernommen und in NVS gespeichert. Sofort 2× `IRID_BEACON`, danach alle `T_BEACON`. Auf `IRID_PROBE` mit eigener ID von fremder MAC → sofort `IRID_BEACON` (Unicast an den Anfrager **und** Broadcast). Auf `IRID_BEACON` mit eigener ID von fremder MAC (zwei isoliert gebootete Stationen treffen sich) → Tie-Break wie oben: kleinere MAC behält, größere geht nach `LISTEN` (mit bereits gefüllter Tabelle, daher kurzer Weg zurück nach `HELD`). |
+
+**Kandidatenwahl** (erste freie ID in dieser Reihenfolge):
+1. die zuletzt in NVS gespeicherte ID (stabil über Neustarts, Log bleibt lesbar),
+2. `(MAC[5] mod 15) + 1` (geräte-typisch, reduziert Gleichzeitig-Boot-Kollisionen),
+3. ab dort aufwärts zyklisch durch 1–15.
+Sind alle 15 belegt: in `LISTEN` bleiben (`ir_id` 0 = Fallback „spielt
+alles"), alle `T_RETRY` erneut versuchen.
+
+**Zeitkonstanten** (`IrIdNegotiator.h`, nativ getestet):
+
+| Konstante | Wert | Begründung |
+|---|---|---|
+| `T_LISTEN` | 3000 ms | > ein volles Beacon-Intervall, auch wenn der Inhaber gerade bis zu ~2 s blockierend einen Sound spielt und sein Beacon verspätet |
+| `T_PROBE` / `N_PROBE` | 150 ms / 3 | Broadcast ist unquittiert; drei Probes decken Einzelverluste ab (~450 ms gesamt) |
+| `T_BEACON` | 2000 ms | 3 Stationen ⇒ 1,5 Pakete/s, vernachlässigbar |
+| `T_EXPIRE` | 8000 ms | 3 verpasste Beacons + Wiedergabe-Reserve; eine ausgeschaltete Station gibt ihre ID nach ~8 s frei |
+| `T_RETRY` | 30 s | nur im Vollbelegungsfall |
+
+**Konsequenzen für die anderen Geräte:**
+- **Target:** keine Änderung (`HIT_REPORT` wie bisher).
+- **Config-Box:** zeigt die ausgehandelte `ir_id` nur noch **an**
+  (Geräteliste, z. B. `220AAC · IR 3`; 0 = „handelt aus"); das
+  Editor-Feld „IR-ID" entfällt. `ir_id` im Station-Config-Blob bleibt
+  für die Wire-Kompatibilität stehen, ist aber **nur noch lesend**:
+  `DISCOVER_REPLY` trägt die gehaltene ID, in `CFG_WRITE` wird das Feld
+  von der Station ignoriert.
+- **Station-Firmware:** Beacon und Antworten müssen auch während
+  blockierender Wiedergabe laufen (Funk-Housekeeping im Chunk-Takt, wie
+  beim Schuss-Sound bereits umgesetzt) – sonst verlängert sich das
+  Konfliktfenster um die Sound-Dauer.
+
+**Kompatibilität:** Beide Nachrichten sind versionsgesperrt (kein
+Rettungsanker) und für ältere Geräte unbekannte Typen, die sie per
+`default` ignorieren. Eine Station mit alter Firmware bleibt auf ihrer
+NVS-`ir_id` (ab Werk 0) und kollidiert höchstens mit anderen Alt-Geräten
+– der Schritt braucht **keinen Flag-Day** und keine Versionserhöhung.
 
 ## IR-Telegramm (Schuss, seit v0x03)
 
@@ -209,7 +277,7 @@ vorbei über den Raw-Handler des `EspNowService`.
 | 2 | `led_busy` | u8 | 0x01 (Rot) – Stab-Farbe „beschäftigt" (z. B. Audio spielt), LED-Maske |
 | 3 | `laser_mode` | u8 | 3 – Schuss-Laser: 0 = nicht gesetzt (→ Default), 1 = aus, 2 = dauerhaft an, 3 = Nachleuchten |
 | 4 | `laser_glow` | u8 | 1 – Nachleuchtdauer in 500-ms-Schritten (nur `laser_mode` = 3; Clamp 20 = 10 s) |
-| 5 | `ir_id` | u8 | 0 – Schützen-ID im IR-Telegramm (0–15; **0 ist gültig** = Werksgruppe, kein Unset-Wert) |
+| 5 | `ir_id` | u8 | 0 – Schützen-ID im IR-Telegramm (0–15; **0 ist gültig** = noch nicht ausgehandelt). **Nur lesend** seit 2026-10-22: die Station handelt den Wert selbst aus und ignoriert ihn in `CFG_WRITE` |
 | 6 | `led_bright_pct` | u8 | 100 – Stab-LED-Helligkeit in % (1–100; 0 = nicht gesetzt → Default) |
 | 7–15 | reserviert (0) | | |
 
@@ -238,6 +306,10 @@ aus dem IR-Telegramm.
   `shooter_id`) → Target decodiert + CRC-Check → `HIT_REPORT` (Broadcast:
   shooter_id, sound_id, damage) → Station mit passender `ir_id` spielt
   `sound_id`. Ziel < 50 ms.
+- **IR-ID-Aushandlung:** Station bootet mit `ir_id` 0 → 3 s mithören
+  (`IRID_BEACON`/`HIT_REPORT` füllen die Belegungstabelle) → freie ID
+  wählen → 3× `IRID_PROBE` → keine Einrede → `HELD`, NVS, Beacon alle
+  2 s. Konflikt löst immer die kleinere MAC zu ihren Gunsten.
 - **Discovery/Config:** `DISCOVER_REQ` → Replies (Unicast) → Liste →
   Cursor sendet alle 500 ms `IDENTIFY` (Gerät blinkt weiß, selbstlöschend
   nach 700 ms) → `CFG_WRITE` → Gerät persistiert NVS → `CFG_ACK`.
@@ -251,7 +323,9 @@ aus dem IR-Telegramm.
 
 `version`-Byte 0x03 ↔ Tags `v3.x` dieses Repos.
 Inkompatible Änderung ⇒ `version`-Byte erhöhen + Major-Tag.
-Geräte-Repos pinnen `lib_deps` auf den Tag.
+Geräte-Repos pinnen `lib_deps` auf den Tag. **Kompatible Erweiterungen**
+(neue Nachrichtentypen, die Altgeräte ignorieren – z. B. die
+IR-ID-Aushandlung in v3.4) erhöhen nur den Minor-Tag.
 
 **Migration v0x02 → v0x03 (Flag-Day):** Empfänger verwerfen fremde
 Versionen am ersten Byte, und der v0x02-Burst triggert den
