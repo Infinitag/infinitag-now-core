@@ -161,6 +161,17 @@ void test_held_station_defends_against_probe() {
   a.out.clear();
   a.neg.onProbe(other, (uint8_t)(held % 15 + 1), bus.now);
   TEST_ASSERT_EQUAL_size_t(0, a.out.size());
+  // A holder beats a prober regardless of MAC order: a SMALLER prober MAC
+  // must not evict the holder (MAC tie-break only applies PROBE-vs-PROBE
+  // and HELD-vs-HELD).
+  uint8_t smaller[6]; setMac(smaller, 0x00);
+  a.out.clear();
+  a.neg.consumeIdChanged();  // clear the 0 -> held transition
+  a.neg.onProbe(smaller, held, bus.now);
+  TEST_ASSERT_EQUAL(IrIdNegotiator::HELD, a.neg.state());
+  TEST_ASSERT_EQUAL_UINT8(held, a.neg.irId());
+  TEST_ASSERT_EQUAL_size_t(2, a.out.size());
+  TEST_ASSERT_FALSE(a.neg.consumeIdChanged());  // no yield
 }
 
 void test_ignores_own_mac_and_invalid_ids() {
