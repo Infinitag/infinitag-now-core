@@ -20,6 +20,8 @@
 #include <DNSServer.h>
 #include <WebServer.h>
 
+#include "ResponsiveWebServer.h"
+
 // Optional second upload target (config box only): store a DEVICE
 // firmware image into the box's file system instead of flashing it
 // (OTA-Vollausbau Etappe 1, Doc 21 §3.4). The callbacks stream the
@@ -92,7 +94,7 @@ class WebUpdateService {
   void handleStoreData();
   void handleStoreDone();
 
-  WebServer _server{80};
+  ResponsiveWebServer _server{80};
   DNSServer _dns;  // answers every name with the AP IP (captive portal)
   char _version[16] = "?";
   char _label[32] = "?";

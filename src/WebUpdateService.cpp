@@ -24,6 +24,7 @@ bool WebUpdateService::begin(const char *apName, const char *fwVersion,
   // the web server and gets redirected (captiveRedirect).
   _dns.setErrorReplyCode(DNSReplyCode::NoError);
   _dns.start(53, "*", WiFi.softAPIP());
+  WiFi.setSleep(false);  // no modem sleep while serving (AP+STA on the box)
 
   _server.on("/", HTTP_GET, [this]() { handleRoot(); });
   _server.on(
@@ -61,6 +62,10 @@ void WebUpdateService::handleReboot() {
 
 void WebUpdateService::loop() {
   _dns.processNextRequest();
+  // Silent spare connections of mobile browsers must not block the
+  // single-client server for HTTP_MAX_DATA_WAIT (5 s) - see
+  // ResponsiveWebServer.h. 250 ms is generous for a real request.
+  _server.dropIdleClient(250);
   _server.handleClient();
 }
 
