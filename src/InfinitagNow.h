@@ -34,6 +34,12 @@ enum MsgType : uint8_t {
                               //   (ir_id from the IR telegram), payload[1] =
                               //   sound_id, payload[2] = damage (broadcast
                               //   keeps the config box live monitor working)
+  MSG_IRID_PROBE     = 0x11,  // station -> broadcast, payload[0] = wanted ir_id
+                              //   (1..15): "does anybody hold this?" – the
+                              //   holder answers with IRID_BEACON
+  MSG_IRID_BEACON    = 0x12,  // station -> broadcast (unicast when answering
+                              //   a probe), payload[0] = held ir_id (1..15);
+                              //   every 2 s and right after acquisition
   MSG_CFG_WRITE      = 0x30,  // Config-Box -> device (unicast), payload = config blob
   MSG_CFG_ACK        = 0x31,  // device -> Config-Box, payload[0] = AckStatus
   MSG_CFG_TEST_SOUND = 0x32,  // Config-Box -> station, payload[0] = sound_id (play only)
