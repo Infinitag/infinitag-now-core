@@ -137,9 +137,9 @@ Evidenz. Die eigene ID steht nicht in der Tabelle.
 
 | Zustand | `ir_id` | Verhalten |
 |---|---|---|
-| `LISTEN` | 0 | Nach Boot (bzw. nach verlorenem Konflikt) `T_LISTEN` lang nur mithören und die Belegungstabelle füllen. |
-| `PROBE` | 0 | Kandidat wählen (Regel unten), `N_PROBE`-mal `IRID_PROBE` im Abstand `T_PROBE` broadcasten. Kommt währenddessen ein `IRID_BEACON` mit dem Kandidaten von fremder MAC → belegt, nächsten Kandidaten wählen (zurück an den Anfang von `PROBE`). Kommt ein `IRID_PROBE` mit dem Kandidaten von fremder MAC (gleichzeitiger Boot) → Tie-Break: die **numerisch kleinere MAC** (memcmp über 6 Byte) fährt fort, die größere wählt den nächsten Kandidaten. |
-| `HELD` | 1–15 | ID übernommen und in NVS gespeichert. Sofort 2× `IRID_BEACON`, danach alle `T_BEACON`. Auf `IRID_PROBE` mit eigener ID von fremder MAC → sofort `IRID_BEACON` (Unicast an den Anfrager **und** Broadcast). Auf `IRID_BEACON` mit eigener ID von fremder MAC (zwei isoliert gebootete Stationen treffen sich) → Tie-Break wie oben: kleinere MAC behält, größere geht nach `LISTEN` (mit bereits gefüllter Tabelle, daher kurzer Weg zurück nach `HELD`). |
+| `LISTEN` | 0 | **Nur nach Boot:** `T_LISTEN` lang nur mithören und die Belegungstabelle füllen. |
+| `PROBE` | 0 | Kandidat wählen (Regel unten), `N_PROBE`-mal `IRID_PROBE` im Abstand `T_PROBE` broadcasten. Kommt währenddessen **irgendeine Evidenz** für den Kandidaten von fremder MAC (`IRID_BEACON`, `HIT_REPORT` mit `shooter_id` = Kandidat) → belegt, nächsten Kandidaten wählen (zurück an den Anfang von `PROBE`). Kommt ein `IRID_PROBE` mit dem Kandidaten von fremder MAC (gleichzeitiger Boot) → Tie-Break: die **numerisch kleinere MAC** (memcmp über 6 Byte) fährt fort, die größere wählt den nächsten Kandidaten. |
+| `HELD` | 1–15 | ID übernommen und in NVS gespeichert. Sofort 2× `IRID_BEACON`, danach alle `T_BEACON`. Auf `IRID_PROBE` mit eigener ID von fremder MAC → sofort `IRID_BEACON` (Unicast an den Anfrager **und** Broadcast). Auf `IRID_BEACON` mit eigener ID von fremder MAC (zwei isoliert gebootete Stationen treffen sich) → Tie-Break wie oben: kleinere MAC behält, größere geht **direkt nach `PROBE`** (das fremde Beacon ist bereits die Evidenz; kein erneutes `LISTEN` – mitten im Spiel darf die Umschaltung nur ~0,5 s dauern, nicht 3,5 s). |
 
 **Kandidatenwahl** (erste freie ID in dieser Reihenfolge):
 1. die zuletzt in NVS gespeicherte ID (stabil über Neustarts, Log bleibt lesbar),
@@ -173,9 +173,29 @@ alles"), alle `T_RETRY` erneut versuchen.
 
 **Kompatibilität:** Beide Nachrichten sind versionsgesperrt (kein
 Rettungsanker) und für ältere Geräte unbekannte Typen, die sie per
-`default` ignorieren. Eine Station mit alter Firmware bleibt auf ihrer
-NVS-`ir_id` (ab Werk 0) und kollidiert höchstens mit anderen Alt-Geräten
-– der Schritt braucht **keinen Flag-Day** und keine Versionserhöhung.
+`default` ignorieren – der Schritt braucht **keinen Flag-Day** und keine
+Versionserhöhung. Einschränkung: Eine Station mit alter Firmware sendet
+keine Beacons; hält sie eine NVS-`ir_id` ≠ 0, sehen neue Stationen sie
+nur über ihre `HIT_REPORT`s (innerhalb `T_EXPIRE`) und können die ID
+davor irrtümlich belegen. Empfehlung daher: alle Stationen zusammen
+aktualisieren (Funk-Push geht in einem Rutsch). Mit Werks-`ir_id` 0
+entsteht kein Konflikt.
+
+**Automatische Absicherung (`test/test_irid/`, `pio test -e native`,
+Gate des Core-Releases):** Die Logik liegt vollständig im Modul
+`IrIdNegotiator` (reines C++, injizierte Uhr + Sende-Callback, kein
+Arduino). Getestet werden
+1. Einzelstation: `LISTEN` → `PROBE` → `HELD` mit MAC-Kandidat, NVS-Vorzug,
+2. zwei gleichzeitig bootende Stationen mit gleichem Kandidaten → Tie-Break, beide `HELD`, verschiedene IDs,
+3. Spätstarter trifft auf Inhaber → weicht aus (Beacon-Antwort auf Probe),
+4. zwei isoliert gebootete Inhaber derselben ID treffen sich → größere MAC geht direkt nach `PROBE`, ≤ 0,5 s auf 0,
+5. `HIT_REPORT` eines Alt-Geräts als Belegungs-Evidenz (Probe-Abbruch),
+6. Verfall nach `T_EXPIRE` gibt die ID frei,
+7. alle 15 belegt → bleibt 0, `T_RETRY`,
+8. **Simulation:** N Negotiatoren an einem virtuellen Broadcast-Bus mit
+   Paketverlust und zufälligen Boot-Versätzen → nach Einschwingen sind
+   alle gehaltenen IDs paarweise verschieden (Eigenschaftstest, viele
+   Seeds).
 
 ## IR-Telegramm (Schuss, seit v0x03)
 
@@ -224,7 +244,7 @@ Unbekannte Test-Nummern beantwortet das Gerät mit UNSUPPORTED.
 |---|---|---|---|
 | 2 | LED-Ring-Testmuster | – | OK (Sichtprüfung R/G/B/W) |
 | 5 | IR-Empfangs-Test | Timeout in Sekunden (0 = 10) | OK beim nächsten gültigen Telegramm (grüner Blitz, keine Hit-Aktion – zum Einschießen), sonst TIMEOUT |
-| 7 | Treffer-Simulation | – | OK = angenommen; das Target fährt die komplette Treffer-Sequenz (Grün-Blitz, rote Welle, Prop-Muster, Cooldown) und broadcastet einen `HIT_REPORT` mit `shooter_id` 0 – zum Einstellen von Hit-Zeit/Cooldown ohne Station |
+| 7 | Treffer-Simulation | – | OK = angenommen; das Target fährt die komplette Treffer-Sequenz (Grün-Blitz, rote Welle, Prop-Muster, Cooldown) und broadcastet einen `HIT_REPORT` mit `shooter_id` 0 – zum Einstellen von Hit-Zeit/Cooldown ohne Station. Seit der IR-ID-Aushandlung spielt keine Station mit ausgehandelter ID diesen Treffer (offener Punkt: ob `shooter_id` 0 künftig „alle spielen" bedeuten soll) |
 
 **Kalibriermodus (Test 6):** Laser und IR-LED-Treiber leuchten dauerhaft
 (kein 38-kHz-Burst-Muster) – zum optischen Ausrichten wird die IR-LED
